@@ -42,7 +42,7 @@ pre_roll_ms = 300          # audio conservé avant le début détecté de la par
 [stt]
 backend = "faster-whisper" # "faster-whisper" | "openai" | "none"
 model = "base"             # tiny | base | small | medium | large-v3 | chemin local  (small = bon compromis en français)
-device = "auto"            # "auto" | "cpu" | "cuda"
+device = "auto"            # "auto" (cuda si les bibliothèques NVIDIA sont chargeables, sinon cpu) | "cpu" | "cuda"
 compute_type = "int8"      # int8 (CPU) | float16 (GPU) | default
 language = ""              # vide = suit assistant.language ; "auto" = détection automatique
 beam_size = 1

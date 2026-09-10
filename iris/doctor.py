@@ -206,6 +206,25 @@ def run_checks(cfg: Config) -> list[Check]:
     )
     checks.append(_binary("espeak-ng", "voix de secours : sudo pacman -S espeak-ng", "info"))
 
+    # --- STT périphérique
+    if cfg.stt.backend == "faster-whisper":
+        from iris.stt.faster_whisper import cuda_usable, resolve_device
+
+        device, reason = resolve_device(cfg.stt.device)
+        checks.append(
+            Check(
+                f"STT device ({cfg.stt.device})",
+                reason is None,
+                device if reason is None else f"{device} — {reason}",
+                'GPU : installe les bibliothèques NVIDIA (cuda, cudnn) ou mets stt.device = "cpu"',
+                "warn",
+            )
+        )
+        if cfg.stt.device == "auto" and not cuda_usable():
+            checks.append(
+                Check("CUDA", True, "non détecté → CPU (normal sans GPU NVIDIA)", level="info")
+            )
+
     # --- STT modèle
     hf_cache = os.environ.get("HF_HOME", os.path.expanduser("~/.cache/huggingface"))
     model_dir = os.path.join(hf_cache, "hub", f"models--Systran--faster-whisper-{cfg.stt.model}")

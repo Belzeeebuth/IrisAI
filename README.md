@@ -392,6 +392,7 @@ Détail par phase, avec les tâches : [docs/ROADMAP.md](docs/ROADMAP.md).
 | « Je n'arrive pas à parler à Hyprland » | Le service n'a pas l'environnement de session : Omarchy (UWSM) l'importe normalement ; sinon `systemctl --user import-environment WAYLAND_DISPLAY HYPRLAND_INSTANCE_SIGNATURE` dans `autostart.conf`. |
 | Le service ne démarre pas au boot | `systemctl --user is-active graphical-session.target` doit être `active` ; sinon utiliser `hypr/iris-autostart.conf`. |
 | Whisper très lent | `stt.model = "tiny"` ou `base` ; `compute_type = "int8"` ; sur GPU NVIDIA : `device = "cuda"`, `compute_type = "float16"`. |
+| « Library libcublas.so.12 is not found » | faster-whisper a tenté CUDA sans les bibliothèques NVIDIA. Depuis 0.2.1 Iris bascule seule sur CPU ; pour le GPU : `sudo pacman -S cuda cudnn` (ou `uv pip install nvidia-cublas-cu12 nvidia-cudnn-cu12` dans le venv + `LD_LIBRARY_PATH`), sinon `stt.device = "cpu"`. |
 | « Je n'ai pas de modèle de langage configuré » | `[llm] enabled = true` + `[privacy] allow_cloud = true` + clé exportée ; `iris llm info` montre ce qui manque. |
 | LLM : « clé API refusée » | Clé Go utilisée avec `provider = "opencode-zen"` (ou l'inverse) : les URL diffèrent (`/zen/go/v1` vs `/zen/v1`). |
 | LLM : « modèle introuvable (404) » | Le modèle n'est pas dans ton plan ; `iris llm models` liste les identifiants disponibles. |
