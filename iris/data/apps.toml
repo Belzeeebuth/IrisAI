@@ -7,8 +7,25 @@ names = ["terminal", "console", "shell", "un terminal", "le terminal"]
 exec = ["$TERMINAL", "ghostty", "alacritty", "kitty", "foot", "wezterm"]
 
 [browser]
-names = ["navigateur", "navigateur web", "navigateur internet", "browser", "web browser", "internet", "le web", "chrome", "chromium", "firefox", "brave"]
+names = ["navigateur", "navigateur web", "navigateur internet", "browser", "web browser", "internet", "le web"]
 exec = ["omarchy-launch-browser", "$BROWSER", "chromium", "firefox", "brave", "google-chrome-stable", "zen-browser"]
+
+# Un navigateur nommé explicitement est lancé lui-même, pas le navigateur par défaut.
+[firefox]
+names = ["firefox", "mozilla", "mozilla firefox"]
+exec = ["firefox", "firefox-developer-edition", "librewolf"]
+
+[chromium]
+names = ["chromium", "chrome", "google chrome"]
+exec = ["chromium", "google-chrome-stable", "google-chrome"]
+
+[brave]
+names = ["brave", "brave browser"]
+exec = ["brave", "brave-browser"]
+
+[zen]
+names = ["zen", "zen browser"]
+exec = ["zen-browser"]
 
 [editor]
 names = ["editeur", "editeur de code", "editeur de texte", "editor", "code editor", "vs code", "vscode", "visual studio code", "code"]

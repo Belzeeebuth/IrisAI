@@ -1,5 +1,11 @@
 # Changelog
 
+## Non publié
+
+- **Navigateurs nommés** : « ouvre Firefox / Chrome / Brave / Zen » lance ce navigateur-là ; seuls « le navigateur », « internet », « le web »… passent par le navigateur par défaut (`omarchy-launch-browser`).
+- **« Lance-moi une page Firefox »**, « un nouvel onglet Firefox », « open a new Firefox window » : les mots page / onglet / fenêtre / tab / window (et nouvelle / new) sont ignorés devant un nom d'application ; « ferme cette page / cet onglet » ferme la fenêtre active.
+- **Hyprland ≥ 0.56** : `hyprctl dispatch` évalue désormais du Lua (`hl.dsp.window.close()`…) et l'ancienne syntaxe `closewindow address:0x…` échoue. Iris détecte le mode Lua au premier échec et traduit ses dispatchers (fermer / focaliser une fenêtre, workspaces, plein écran, flottant, moniteurs). Avant ce correctif, « ferme Spotify » retombait sur `pkill`, ce qui tuait l'application au lieu de la fermer proprement.
+
 ## 0.4.0 — Phase 4 : personnalisation, habitudes, automatisations
 
 - **Style à la voix** : « sois plus directe / taquine / pro / zen / motivante / chaleureuse », « sois plus concise / bavarde », « réponses normales », « parle en anglais / français » ; trois nouveaux tons (`playful`, `pro`, `zen`) avec variantes de réponses. Les préférences dites à la voix sont **mémorisées** (table `prefs`) et réappliquées au démarrage par-dessus `config.toml` ; `iris prefs [list|reset]`.

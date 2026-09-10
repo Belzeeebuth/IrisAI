@@ -57,10 +57,14 @@ class AppResolver:
     def resolve(self, query: str) -> ResolvedApp | None:
         full = canonical(query)
         q = re.sub(
-            r"^(?:l'|le |la |les |un |une |mon |ma |mes |the |my |a |an )?(?:application |app |appli |logiciel |programme )?",
+            r"^(?:l'|le |la |les |un |une |mon |ma |mes |the |my |a |an )?"
+            r"(?:nouvelle |nouveau |nouvel |new )?"
+            r"(?:application |app |appli |logiciel |programme |page |onglet |fenetre |tab |window )?"
+            r"(?:de |d'|of )?",
             "",
             full,
         ).strip()
+        q = re.sub(r"\s+(?:page|onglet|fenetre|tab|window)$", "", q).strip()
         if not q:
             return None
         variants = [full, q] if full != q else [q]

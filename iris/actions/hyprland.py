@@ -50,8 +50,68 @@ def hyprctl(*args: str, as_json: bool = False) -> Any:
     return result.out
 
 
+# Hyprland ≥ 0.56 : ``hyprctl dispatch`` évalue du Lua (``hl.dsp.window.close()``…) ;
+# l'ancienne syntaxe ``closewindow address:0x…`` échoue avec « hl.dispatch: expected a
+# dispatcher ». On tente l'ancienne syntaxe une fois, puis on traduit si nécessaire.
+_lua_dispatch: bool | None = None
+
+
+def _lua_str(value: str) -> str:
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def _lua_args(**fields: str) -> str:
+    inner = ", ".join(f"{k} = {_lua_str(v)}" for k, v in fields.items() if v)
+    return f"({{ {inner} }})" if inner else "()"
+
+
+def to_lua(name: str, *args: str) -> str:
+    """Traduit un dispatcher classique en appel Lua ``hl.dsp.…`` (Hyprland ≥ 0.56)."""
+    arg = " ".join(a for a in args if a).strip()
+    if name == "killactive":
+        return "hl.dsp.window.close()"
+    if name == "closewindow":
+        return "hl.dsp.window.close" + _lua_args(window=arg)
+    if name == "focuswindow":
+        return "hl.dsp.focus" + _lua_args(window=arg)
+    if name == "workspace":
+        return "hl.dsp.focus" + _lua_args(workspace=arg)
+    if name in ("movetoworkspace", "movetoworkspacesilent"):
+        lua = "hl.dsp.window.move" + _lua_args(workspace=arg)
+        if name.endswith("silent"):
+            lua = lua[:-3] + ", follow = false })"
+        return lua
+    if name == "fullscreen":
+        return "hl.dsp.window.fullscreen" + _lua_args(
+            mode="maximized" if arg == "1" else "fullscreen"
+        )
+    if name == "togglefloating":
+        return "hl.dsp.window.float" + _lua_args(action="toggle")
+    if name == "movewindow" and arg.startswith("mon:"):
+        return "hl.dsp.window.move" + _lua_args(monitor=arg[4:])
+    if name == "focusmonitor":
+        return "hl.dsp.focus" + _lua_args(monitor=arg)
+    raise RuntimeError(f"dispatcher sans équivalent Lua : {name} {arg}".strip())
+
+
+def _is_lua_syntax_error(message: str) -> bool:
+    return "hl.dispatch" in message
+
+
 def dispatch(*args: str) -> str:
-    return hyprctl("dispatch", *args)
+    global _lua_dispatch
+    if not args:
+        raise RuntimeError("dispatch sans dispatcher")
+    if _lua_dispatch:
+        return hyprctl("dispatch", to_lua(*args))
+    try:
+        return hyprctl("dispatch", *args)
+    except RuntimeError as exc:
+        if _lua_dispatch is False or not _is_lua_syntax_error(str(exc)):
+            raise
+        log.info("Hyprland en mode Lua : les dispatchers sont traduits (hl.dsp.…)")
+        _lua_dispatch = True
+        return hyprctl("dispatch", to_lua(*args))
 
 
 def switch_workspace(n: int) -> None:

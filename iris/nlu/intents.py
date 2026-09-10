@@ -17,8 +17,12 @@ from iris.config import CustomCommand
 from iris.nlu.normalize import canonical, strip_politeness
 
 DEVICE = r"(?:le |l'|la |the |my |mon |ma )?(?:pc|ordinateur|ordi|computer|system|systeme|machine|laptop|portable)"
-ART = r"(?:l'|le |la |les |un |une |mon |ma |mes |the |my |a |an |this |ce |cette )?"
-APP_WORD = r"(?:application |app |appli |logiciel |programme )?"
+ART = r"(?:l'|le |la |les |un |une |mon |ma |mes |the |my |a |an |this |ce |cet |cette )?"
+APP_WORD = (
+    r"(?:nouvelle |nouveau |nouvel |new )?"
+    r"(?:application |app |appli |logiciel |programme |page |onglet |fenetre |tab |window )?(?:de |d'|of )?"
+)
+APP_SUFFIX = r"(?:\s+(?:tab|window|page|onglet|fenetre))?"
 WS_WORD = r"(?:workspace|bureau|espace de travail|espace|desktop)"
 DIRECTION = r"(?P<direction>gauche|droite|haut|bas|left|right|up|down|suivant|next|precedent|prev)"
 BT_ART = r"(?:mes |mon |ma |les |le |la |my |the |a |aux |au |to )?"
@@ -434,7 +438,7 @@ RULES: list[Rule] = [
     Rule(
         "window_close",
         [
-            r"^(?:ferme|close|kill|quitte)\s+(?:cette |la |this |the |active |current )?(?:fenetre|window)"
+            r"^(?:ferme|close|kill|quitte)\s+(?:cette |cet |la |this |the |active |current )?(?:fenetre|window|page|onglet|tab)"
             r"(?: (?:active|courante|actuelle))?$",
         ],
     ),
@@ -652,14 +656,14 @@ RULES: list[Rule] = [
     Rule(
         "close_app",
         [
-            rf"^(?:ferme|quitte|tue|close|quit|kill|exit)\s+(?P<app_raw>{ART}{APP_WORD}(?P<app>.+?))$",
+            rf"^(?:ferme|quitte|tue|close|quit|kill|exit)\s+(?P<app_raw>{ART}{APP_WORD}(?P<app>.+?){APP_SUFFIX})$",
         ],
     ),
     Rule(
         "open_app",
         [
             rf"^(?:ouvre|ouvrir|lance|lancer|demarre|demarrer|execute|open|launch|start|run)\s+(?:moi\s+)?"
-            rf"(?P<app_raw>{ART}{APP_WORD}(?P<app>.+?))$",
+            rf"(?P<app_raw>{ART}{APP_WORD}(?P<app>.+?){APP_SUFFIX})$",
         ],
     ),
     Rule(
