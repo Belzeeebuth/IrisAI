@@ -16,9 +16,11 @@ import logging
 import os
 import urllib.error
 import urllib.request
+import uuid
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 
+from iris import __version__
 from iris.config import LLMConfig
 
 log = logging.getLogger(__name__)
@@ -122,6 +124,7 @@ class LLMClient:
         self.api_key = api_key
         self.timeout = timeout
         self.provider = provider
+        self.session_id = uuid.uuid4().hex
         self._transport = transport or _urllib_transport
         self._stream_transport = stream_transport or _urllib_stream
         self.api = self._resolve_api(api)
@@ -138,6 +141,22 @@ class LLMClient:
     @property
     def is_local(self) -> bool:
         return is_local_url(self.base_url)
+
+    def _headers(self) -> dict[str, str]:
+        headers = {
+            "Content-Type": "application/json",
+            "User-Agent": f"iris-assistant/{__version__}",
+        }
+        if self.provider.startswith("opencode"):
+            # OpenCode Go refuse (400) les requêtes sans identifiant de conversation stable.
+            headers["x-opencode-session"] = self.session_id
+        if self.api == "messages":
+            headers["anthropic-version"] = "2023-06-01"
+            if self.api_key:
+                headers["x-api-key"] = self.api_key
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        return headers
 
     # ------------------------------------------------------------------ public
     def chat(
@@ -176,15 +195,7 @@ class LLMClient:
             }
             if system:
                 payload["system"] = system
-            headers = {
-                "Content-Type": "application/json",
-                "User-Agent": "iris-assistant",
-                "anthropic-version": "2023-06-01",
-            }
-            if self.api_key:
-                headers["x-api-key"] = self.api_key
-                headers["Authorization"] = f"Bearer {self.api_key}"
-            for event in self._stream("/messages", headers, payload):
+            for event in self._stream("/messages", self._headers(), payload):
                 if event.get("type") == "content_block_delta":
                     delta = event.get("delta") or {}
                     if delta.get("type") == "text_delta" and delta.get("text"):
@@ -197,10 +208,7 @@ class LLMClient:
             "temperature": temperature,
             "stream": True,
         }
-        headers = {"Content-Type": "application/json", "User-Agent": "iris-assistant"}
-        if self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
-        for event in self._stream("/chat/completions", headers, payload):
+        for event in self._stream("/chat/completions", self._headers(), payload):
             try:
                 delta = event["choices"][0].get("delta") or {}
             except (KeyError, IndexError, TypeError):
@@ -245,10 +253,7 @@ class LLMClient:
         }
         if json_mode:
             payload["response_format"] = {"type": "json_object"}
-        headers = {"Content-Type": "application/json", "User-Agent": "iris-assistant"}
-        if self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
-        data = self._post("/chat/completions", headers, payload)
+        data = self._post("/chat/completions", self._headers(), payload)
         try:
             choice = data["choices"][0]
             content = choice["message"].get("content") or ""
@@ -280,15 +285,7 @@ class LLMClient:
         }
         if system:
             payload["system"] = system
-        headers = {
-            "Content-Type": "application/json",
-            "User-Agent": "iris-assistant",
-            "anthropic-version": "2023-06-01",
-        }
-        if self.api_key:
-            headers["x-api-key"] = self.api_key
-            headers["Authorization"] = f"Bearer {self.api_key}"
-        data = self._post("/messages", headers, payload)
+        data = self._post("/messages", self._headers(), payload)
         try:
             text = "".join(
                 block.get("text", "") for block in data["content"] if block.get("type") == "text"
