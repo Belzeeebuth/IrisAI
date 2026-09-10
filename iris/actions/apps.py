@@ -120,7 +120,13 @@ class AppResolver:
         if system.which(argv[0]) is None:
             return None
         exe = Path(argv[0]).name
-        return ResolvedApp(query, label or exe, argv, match_keys=(exe, query), source=source)
+        display = exe
+        if "-e" in argv:
+            i = argv.index("-e")
+            if i + 1 < len(argv) and argv[i + 1]:
+                # « $TERMINAL -e prog » : on annonce « prog », pas le terminal qui l'héberge.
+                display = Path(argv[i + 1]).name
+        return ResolvedApp(query, label or display, argv, match_keys=(exe, query), source=source)
 
     # ------------------------------------------------------------------ .desktop
     def _desktop_entries(self) -> list[tuple[str, str, str, bool]]:
