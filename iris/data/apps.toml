@@ -1,0 +1,131 @@
+# Alias d'applications embarqués : nom(s) prononcé(s) → commandes candidates (la première trouvée gagne).
+# "$TERMINAL -e btop" est développé avec l'environnement ; "webapp:URL" ouvre une web-app Omarchy.
+# L'utilisateur peut compléter/écraser avec [apps] dans ~/.config/iris/config.toml.
+
+[terminal]
+names = ["terminal", "console", "shell", "un terminal", "le terminal"]
+exec = ["$TERMINAL", "ghostty", "alacritty", "kitty", "foot", "wezterm"]
+
+[browser]
+names = ["navigateur", "navigateur web", "navigateur internet", "browser", "web browser", "internet", "le web", "chrome", "chromium", "firefox", "brave"]
+exec = ["omarchy-launch-browser", "$BROWSER", "chromium", "firefox", "brave", "google-chrome-stable", "zen-browser"]
+
+[editor]
+names = ["editeur", "editeur de code", "editeur de texte", "editor", "code editor", "vs code", "vscode", "visual studio code", "code"]
+exec = ["omarchy-launch-editor", "$VISUAL", "code", "cursor", "zed", "$EDITOR"]
+
+[files]
+names = ["fichiers", "gestionnaire de fichiers", "explorateur", "explorateur de fichiers", "mes fichiers", "files", "file manager", "explorer", "nautilus"]
+exec = ["nautilus", "thunar", "dolphin", "nemo", "pcmanfm"]
+
+[music]
+names = ["musique", "music", "spotify", "ma musique"]
+exec = ["spotify", "spotify-launcher", "webapp:https://open.spotify.com"]
+
+[calculator]
+names = ["calculatrice", "calculette", "calculator"]
+exec = ["gnome-calculator", "qalculate-gtk", "galculator"]
+
+[monitor]
+names = ["moniteur systeme", "moniteur", "gestionnaire des taches", "task manager", "system monitor", "btop", "htop"]
+exec = ["$TERMINAL -e btop", "$TERMINAL -e htop", "gnome-system-monitor"]
+
+[launcher]
+names = ["lanceur", "le lanceur", "menu", "le menu", "launcher", "app launcher", "walker"]
+exec = ["omarchy-menu", "walker", "wofi", "rofi -show drun"]
+
+[keybindings]
+names = ["raccourcis", "raccourcis clavier", "keybindings", "shortcuts", "les raccourcis"]
+exec = ["omarchy-menu-keybindings", "omarchy-show-keybindings"]
+
+[settings]
+names = ["parametres", "les parametres", "reglages", "settings", "configuration"]
+exec = ["omarchy-menu", "gnome-control-center"]
+
+[discord]
+names = ["discord"]
+exec = ["discord", "webapp:https://discord.com/app"]
+
+[slack]
+names = ["slack"]
+exec = ["slack", "webapp:https://app.slack.com"]
+
+[signal]
+names = ["signal"]
+exec = ["signal-desktop"]
+
+[telegram]
+names = ["telegram"]
+exec = ["telegram-desktop", "Telegram"]
+
+[whatsapp]
+names = ["whatsapp"]
+exec = ["webapp:https://web.whatsapp.com"]
+
+[obsidian]
+names = ["obsidian", "mes notes", "notes"]
+exec = ["obsidian"]
+
+[steam]
+names = ["steam"]
+exec = ["steam"]
+
+[vlc]
+names = ["vlc", "lecteur video", "video player"]
+exec = ["vlc", "mpv"]
+
+[gimp]
+names = ["gimp"]
+exec = ["gimp"]
+
+[libreoffice]
+names = ["libreoffice", "libre office", "traitement de texte", "writer"]
+exec = ["libreoffice", "libreoffice --writer"]
+
+[thunderbird]
+names = ["thunderbird", "mails", "mes mails", "messagerie", "email", "courrier"]
+exec = ["thunderbird", "webapp:https://mail.google.com"]
+
+[youtube]
+names = ["youtube"]
+exec = ["webapp:https://youtube.com"]
+
+[github]
+names = ["github", "git hub"]
+exec = ["webapp:https://github.com"]
+
+[chatgpt]
+names = ["chatgpt", "chat gpt"]
+exec = ["webapp:https://chatgpt.com"]
+
+[claude]
+names = ["claude", "claude ai"]
+exec = ["webapp:https://claude.ai"]
+
+[figma]
+names = ["figma"]
+exec = ["webapp:https://figma.com"]
+
+[notion]
+names = ["notion"]
+exec = ["webapp:https://notion.so"]
+
+[x]
+names = ["x", "twitter"]
+exec = ["webapp:https://x.com"]
+
+[zoom]
+names = ["zoom"]
+exec = ["zoom", "webapp:https://app.zoom.us"]
+
+[lazygit]
+names = ["lazygit", "lazy git"]
+exec = ["$TERMINAL -e lazygit"]
+
+[lazydocker]
+names = ["lazydocker", "lazy docker", "docker"]
+exec = ["$TERMINAL -e lazydocker"]
+
+[neovim]
+names = ["neovim", "vim", "nvim"]
+exec = ["$TERMINAL -e nvim"]

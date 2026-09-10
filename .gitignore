@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Modèles / voix téléchargés (jamais versionnés)
+voices/
+models/
+*.onnx
+*.onnx.json
+*.bin
+*.tflite
+
+# Données locales
+*.db
+*.log
+.env

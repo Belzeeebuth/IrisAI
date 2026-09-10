@@ -1,0 +1,22 @@
+# Unité utilisateur systemd pour Iris.
+# `iris service install` génère une copie avec le bon chemin dans ~/.config/systemd/user/.
+# Installation manuelle :
+#   cp systemd/iris.service ~/.config/systemd/user/ && systemctl --user enable --now iris
+[Unit]
+Description=Iris — assistant vocal pour Omarchy OS
+Documentation=https://github.com/belzeeebuth/irisai
+PartOf=graphical-session.target
+After=graphical-session.target pipewire.service wireplumber.service
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/iris run
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=10
+Environment=PYTHONUNBUFFERED=1
+Slice=background.slice
+Nice=5
+
+[Install]
+WantedBy=graphical-session.target

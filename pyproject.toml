@@ -1,0 +1,72 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "iris-assistant"
+version = "0.1.0"
+description = "Iris — assistant vocal natif pour Omarchy OS (Hyprland)"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+authors = [{ name = "belzeeebuth" }]
+keywords = ["voice-assistant", "omarchy", "hyprland", "wayland", "whisper", "piper", "speech"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: End Users/Desktop",
+  "License :: OSI Approved :: MIT License",
+  "Natural Language :: French",
+  "Natural Language :: English",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Desktop Environment",
+  "Topic :: Multimedia :: Sound/Audio :: Speech",
+]
+# Le cœur d'Iris ne dépend que de numpy : tout le reste est optionnel et chargé à la demande.
+dependencies = ["numpy>=1.24"]
+
+[project.optional-dependencies]
+# Transcription locale (Whisper via CTranslate2)
+stt = ["faster-whisper>=1.1"]
+# Synthèse vocale locale (Piper)
+tts = ["piper-tts>=1.3"]
+# Capture micro via PortAudio + VAD WebRTC (sinon Iris utilise parec / pw-record)
+audio = ["sounddevice>=0.4.6", "webrtcvad-wheels>=2.0.14"]
+# Détection du mot d'activation sur l'audio brut (modèle personnalisé « hey iris »)
+wakeword = ["openwakeword>=0.6"]
+# Backends cloud optionnels (ElevenLabs, fallback Whisper API)
+cloud = ["requests>=2.31"]
+# Tout le mode local
+local = ["iris-assistant[stt,tts,audio,wakeword]"]
+all = ["iris-assistant[stt,tts,audio,wakeword,cloud]"]
+dev = ["pytest>=8", "ruff>=0.5"]
+
+[project.scripts]
+iris = "iris.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/belzeeebuth/irisai"
+Repository = "https://github.com/belzeeebuth/irisai"
+Issues = "https://github.com/belzeeebuth/irisai/issues"
+
+[tool.setuptools.packages.find]
+include = ["iris*"]
+
+[tool.setuptools.package-data]
+iris = ["data/*.toml", "data/*.service", "py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B"]
+ignore = ["E501"]
