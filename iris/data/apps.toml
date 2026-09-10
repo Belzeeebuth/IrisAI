@@ -129,3 +129,7 @@ exec = ["$TERMINAL -e lazydocker"]
 [neovim]
 names = ["neovim", "vim", "nvim"]
 exec = ["$TERMINAL -e nvim"]
+
+[opencode]
+names = ["opencode", "open code"]
+exec = ["$TERMINAL -e opencode"]

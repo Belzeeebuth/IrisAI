@@ -45,6 +45,7 @@ def _parser() -> argparse.ArgumentParser:
         "--backend", default=None, help="kokoro | openai | piper | elevenlabs | espeak"
     )
     say.add_argument("--lang", default=None, help="fr | en")
+    say.add_argument("--voice", default=None, help="nom ou id de voix (selon le backend)")
 
     listen = sub.add_parser(
         "listen", help="enregistrer quelques secondes et transcrire (test micro + STT)"
