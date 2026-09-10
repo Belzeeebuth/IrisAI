@@ -15,6 +15,7 @@ Fichier : `~/.config/iris/config.toml` (`iris config path`). Créé avec toutes 
 | `follow_up_window_s` | `5.0` | Après une commande, secondes pour enchaîner sans mot d'activation (`0` pour désactiver). |
 | `confirm_timeout_s` | `12.0` | Délai de réponse à une demande de confirmation. |
 | `ack_sound` | `true` | Bip d'activation (sinon « Oui ? » parlé). |
+| `resume_prompt` | `false` | Au démarrage, proposer de reprendre la session précédente (voir `[memory]`). |
 
 ## `[wake]`
 
@@ -101,6 +102,7 @@ Fichier : `~/.config/iris/config.toml` (`iris config path`). Créé avec toutes 
 | `search_url` | DuckDuckGo | `{q}` est remplacé par la requête encodée. |
 | `notify` | `true` | Notification bureau pour les réponses longues (agent). |
 | `typing_tool` | `"auto"` | `wtype` · `ydotool` · `clipboard`. |
+| `project_dirs` | `["~/projets", "~/projects", "~/Projects", "~/code", "~/dev", "~/src", "~/work"]` | Dossiers explorés pour « ouvre le projet X ». |
 | `status_file` | `""` | Vide = `$XDG_RUNTIME_DIR/iris/state.json`. |
 | `waybar_signal` | `0` | ex. `8` → `pkill -RTMIN+8 waybar` à chaque changement d'état. |
 
@@ -118,8 +120,46 @@ Fichier : `~/.config/iris/config.toml` (`iris config path`). Créé avec toutes 
 | `fallback_nlu` | `true` | Phrase inconnue → décision du modèle (action / réponse / silence). |
 | `chat` | `true` | Questions ouvertes (`ask_llm`). |
 | `context` | `true` | Heure, fenêtre active, workspace, batterie, dernières actions dans le prompt. |
-| `history_turns` | `6` | Tours de conversation gardés en mémoire (RAM). |
+| `history_turns` | `6` | Tours de conversation transmis au modèle (persistants dans SQLite). |
 | `system_prompt_extra` | `""` | Consignes supplémentaires. |
+| `stream` | `true` | Réponses aux questions lues phrase par phrase pendant la génération. |
+| `tools` | `true` | Outils du modèle : `calc`, `clipboard`, `read_file` (dossier personnel), `recall`, `tasks`. |
+
+## `[memory]`
+
+| Clé | Défaut | Rôle |
+|---|---|---|
+| `enabled` | `true` | Faits, historique LLM, instantanés de session. |
+| `snapshot_interval_min` | `10` | Fréquence des instantanés des fenêtres ouvertes (session « last »). |
+| `resume_min_age_min` | `60` | Âge minimal de l'instantané pour proposer une reprise. |
+| `max_facts` | `200` | Nombre de faits conservés. |
+
+## `[agents]`
+
+| Clé | Défaut | Rôle |
+|---|---|---|
+| `enabled` | `false` | « demande à Claude / OpenCode / Codex / Gemini … ». |
+| `default` | `"claude"` | Agent pour « lance un agent … ». |
+| `timeout_s` / `workdir` | `600` / `""` | Délai ; dossier par défaut (« … dans le projet X » prend le dessus). |
+| `[agents.bins]` | | Chemins des CLI (`claude = "/chemin/claude"`). |
+
+Anciennes clés `claude_code_enabled`, `claude_bin`, `claude_workdir` toujours acceptées.
+
+## `[projects]`
+
+`"nom prononcé" = "~/chemin"`. Sans entrée, Iris cherche dans `system.project_dirs`.
+
+## `[[tasks]]`
+
+```toml
+[[tasks]]
+name = "compilation"
+phrases = ["lance la compilation", "compile le projet"]
+exec = "cargo build --release"
+cwd = "~/projets/cnvs-clone"
+announce = true      # annonce vocale à la fin
+notify = true        # notification bureau
+```
 
 ## `[bluetooth]`
 

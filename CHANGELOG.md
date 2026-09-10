@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.0 — Phase 3 : tâches, agents, projets, mémoire
+
+- **Tâches en arrière-plan** (`[[tasks]]`) : lancement, surveillance d'un processus existant, état, annulation, lecture du résultat ; annonce vocale et notification à la fin, différées pendant une confirmation ou une dictée ; historique `iris tasks`.
+- **Agents IA** lancés à la voix : Claude Code (`claude -p`), OpenCode (`opencode run`), Codex (`codex exec`), Gemini CLI, dans le dossier du projet (« … dans le projet X ») ; résumé parlé + notification ; `iris agents`. Remplace l'ancien pont Claude synchrone (clés `claude_code_*` toujours acceptées).
+- **Projets** : « ouvre le projet X » (éditeur + terminal dans le dossier), `[projects]`, `system.project_dirs`, `iris projects`.
+- **Voix → terminal** : « envoie : … », « dis au terminal … », « mode terminal » (dictée avec Entrée).
+- **Mémoire persistante** : faits (« retiens que … », « oublie … », « que sais-tu de moi ? »), injectés dans le prompt du LLM ; historique de conversation LLM persistant ; instantanés de session et « reprends ma session d'hier » ; proposition de reprise au démarrage (`assistant.resume_prompt`) ; `iris memory`.
+- **LLM** : réponses en streaming (SSE, phrase par phrase), outils du modèle (`calc`, `clipboard`, `read_file`, `recall`, `tasks`).
+- Les slots libres (dictée, prompts, mémoire, recherches) conservent le texte d'origine (accents, majuscules).
+- Mot d'activation en fin de phrase : « ouvre le projet iris » n'est plus tronqué.
+- 77 intentions, 336 tests.
+
 ## 0.2.1 — Voix cloud premium, repli CPU
 
 - **ElevenLabs** devient la voix de référence : backend réécrit sans dépendance (`xi-api-key`, PCM 24 kHz), voix par **nom** résolue via `/v1/voices`, exploration de la **bibliothèque** communautaire par langue (`iris voices library --lang fr --preview N`) et ajout au compte (`iris voices add`), réglages `stability / similarity / style / speed / speaker_boost`, `language_code` pour flash/turbo/v3, `previous_text` pour la continuité entre phrases, arrondi de `stability` pour `eleven_v3`.

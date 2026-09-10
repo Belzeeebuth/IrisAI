@@ -16,7 +16,7 @@ import logging
 import os
 import urllib.error
 import urllib.request
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 
 from iris.config import LLMConfig
@@ -49,6 +49,7 @@ class ChatResult:
 
 
 Transport = Callable[[str, dict[str, str], bytes, float], tuple[int, bytes]]
+StreamTransport = Callable[[str, dict[str, str], bytes, float], tuple[int, Iterator[bytes]]]
 
 
 def _urllib_transport(
@@ -60,6 +61,37 @@ def _urllib_transport(
             return resp.status, resp.read()
     except urllib.error.HTTPError as exc:
         return exc.code, exc.read()
+
+
+def _urllib_stream(
+    url: str, headers: dict[str, str], body: bytes, timeout: float
+) -> tuple[int, Iterator[bytes]]:
+    req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+    try:
+        resp = urllib.request.urlopen(req, timeout=timeout)  # noqa: S310
+    except urllib.error.HTTPError as exc:
+        return exc.code, iter([exc.read()])
+
+    def lines() -> Iterator[bytes]:
+        with resp:
+            yield from resp
+
+    return resp.status, lines()
+
+
+def parse_sse(lines: Iterator[bytes]) -> Iterator[dict]:
+    """Décode un flux Server-Sent Events : chaque ``data: {...}`` devient un dict."""
+    for raw in lines:
+        line = raw.decode("utf-8", "replace").strip()
+        if not line.startswith("data:"):
+            continue
+        payload = line[5:].strip()
+        if not payload or payload == "[DONE]":
+            continue
+        try:
+            yield json.loads(payload)
+        except json.JSONDecodeError:
+            continue
 
 
 def is_local_url(url: str) -> bool:
@@ -81,6 +113,7 @@ class LLMClient:
         timeout: float = 30.0,
         transport: Transport | None = None,
         provider: str = "custom",
+        stream_transport: StreamTransport | None = None,
     ) -> None:
         if not base_url:
             raise LLMError("base_url manquante pour le LLM")
@@ -90,6 +123,7 @@ class LLMClient:
         self.timeout = timeout
         self.provider = provider
         self._transport = transport or _urllib_transport
+        self._stream_transport = stream_transport or _urllib_stream
         self.api = self._resolve_api(api)
 
     def _resolve_api(self, api: str) -> str:
@@ -118,6 +152,88 @@ class LLMClient:
         if self.api == "messages":
             return self._chat_messages(messages, system, max_tokens, temperature)
         return self._chat_completions(messages, system, max_tokens, temperature, json_mode)
+
+    def chat_stream(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        system: str = "",
+        max_tokens: int = 400,
+        temperature: float = 0.4,
+    ) -> Iterator[str]:
+        """Itère sur les fragments de texte au fil de la génération (SSE)."""
+        if self.api == "messages":
+            payload: dict = {
+                "model": self.model,
+                "messages": [
+                    {"role": m["role"], "content": m["content"]}
+                    for m in messages
+                    if m["role"] != "system"
+                ],
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+                "stream": True,
+            }
+            if system:
+                payload["system"] = system
+            headers = {
+                "Content-Type": "application/json",
+                "User-Agent": "iris-assistant",
+                "anthropic-version": "2023-06-01",
+            }
+            if self.api_key:
+                headers["x-api-key"] = self.api_key
+                headers["Authorization"] = f"Bearer {self.api_key}"
+            for event in self._stream("/messages", headers, payload):
+                if event.get("type") == "content_block_delta":
+                    delta = event.get("delta") or {}
+                    if delta.get("type") == "text_delta" and delta.get("text"):
+                        yield delta["text"]
+            return
+        payload = {
+            "model": self.model,
+            "messages": ([{"role": "system", "content": system}] if system else []) + messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "stream": True,
+        }
+        headers = {"Content-Type": "application/json", "User-Agent": "iris-assistant"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        for event in self._stream("/chat/completions", headers, payload):
+            try:
+                delta = event["choices"][0].get("delta") or {}
+            except (KeyError, IndexError, TypeError):
+                continue
+            content = delta.get("content")
+            if isinstance(content, list):
+                content = "".join(
+                    part.get("text", "") for part in content if isinstance(part, dict)
+                )
+            if content:
+                yield content
+
+    def _stream(self, path: str, headers: dict[str, str], payload: dict) -> Iterator[dict]:
+        body = json.dumps(payload).encode("utf-8")
+        url = f"{self.base_url}{path}"
+        try:
+            status, lines = self._stream_transport(url, headers, body, self.timeout)
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            raise LLMError(f"connexion impossible à {self.base_url} : {exc}") from exc
+        if status >= 400:
+            raw = b"".join(lines)
+            self._raise_http(status, raw, url)
+        yield from parse_sse(lines)
+
+    def _raise_http(self, status: int, raw: bytes, url: str) -> None:
+        detail = raw.decode("utf-8", "replace")[:300]
+        if status in (401, 403):
+            raise LLMError("clé API refusée (401/403) — vérifie OPENCODE_API_KEY / l'abonnement")
+        if status == 404:
+            raise LLMError(f"modèle ou endpoint introuvable (404) : {self.model} sur {url}")
+        if status == 429:
+            raise LLMError("quota atteint (429) — réessaie plus tard")
+        raise LLMError(f"HTTP {status} : {detail}")
 
     # ------------------------------------------------------------------ OpenAI-compatible
     def _chat_completions(self, messages, system, max_tokens, temperature, json_mode) -> ChatResult:

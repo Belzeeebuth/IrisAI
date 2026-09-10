@@ -14,6 +14,7 @@ active_window_s = 8.0      # après « Hey Iris » seule, temps d'attente d'une 
 follow_up_window_s = 5.0   # après une commande, fenêtre pour enchaîner sans mot d'activation (s)
 confirm_timeout_s = 12.0   # délai de réponse à « Veux-tu vraiment … ? » (s)
 ack_sound = true           # petit signal sonore à l'activation (si un lecteur audio est disponible)
+resume_prompt = false      # au démarrage, proposer « Veux-tu reprendre ta session d'hier ? » (voir [memory])
 
 [wake]
 # "transcript"   : le mot d'activation est reconnu dans la transcription (aucun modèle à entraîner)
@@ -138,16 +139,35 @@ temperature = 0.4
 fallback_nlu = true        # phrase non reconnue par les règles → le LLM choisit une action Iris ou répond
 chat = true                # « Iris, explique-moi … », « pourquoi … », « question : … »
 context = true             # transmet heure, fenêtre active, workspace et dernières actions
-history_turns = 6          # mémoire de conversation (tours) gardée en RAM
+history_turns = 6          # tours de conversation transmis au modèle (persistants, voir [memory])
 system_prompt_extra = ""
+stream = true              # réponses parlées phrase par phrase pendant la génération
+tools = true               # le modèle peut utiliser : calc, clipboard, read_file (dans ton dossier), recall, tasks
 
+# ----------------------------------------------------------------------------
+# Mémoire persistante : faits (« retiens que … »), historique LLM, instantanés de session.
+# ----------------------------------------------------------------------------
+[memory]
+enabled = true
+snapshot_interval_min = 10 # instantané des fenêtres ouvertes (workspace par workspace) pour la reprise
+resume_min_age_min = 60    # ne proposer la reprise que si l'instantané date d'au moins une heure
+max_facts = 200
+
+# ----------------------------------------------------------------------------
+# Agents IA lancés à la voix, en arrière-plan : « demande à Claude de corriger les tests dans le projet X »
+# Chaque CLI utilise sa propre connexion (claude login, compte OpenCode…) : aucune clé API dans Iris.
+# ----------------------------------------------------------------------------
 [agents]
-# Phase 3 (expérimental) : « Iris, demande à Claude … » délègue au CLI Claude Code,
-# authentifié avec ton abonnement claude.ai (`claude login`), sans clé API.
-claude_code_enabled = false
-claude_bin = "claude"
-claude_timeout_s = 180
-claude_workdir = ""        # vide = dossier personnel
+enabled = false
+default = "claude"         # "claude" (Claude Code) | "opencode" | "codex" | "gemini"
+timeout_s = 600
+workdir = ""               # dossier par défaut ; « … dans le projet X » prend le dessus
+# [agents.bins]
+# claude = "/home/moi/.local/bin/claude"
+
+[projects]
+# Nom prononcé = dossier. Sans entrée ici, Iris cherche dans system.project_dirs (~/projets, ~/code, ~/dev…).
+# "cnvs clone" = "~/projets/cnvs-clone"
 
 [apps]
 # Alias supplémentaires : nom prononcé = commande (ou "webapp:URL").
@@ -170,6 +190,18 @@ claude_workdir = ""        # vide = dossier personnel
 #   { workspace = 3, exec = "kdenlive" },
 #   { workspace = 4, exec = "$TERMINAL -e btop" },
 # ]
+
+# ----------------------------------------------------------------------------
+# Tâches longues surveillées : « lance la compilation » puis Iris annonce la fin (succès / échec, durée).
+# « surveille la compilation » lance la tâche si elle existe ici, sinon surveille un processus du même nom.
+# ----------------------------------------------------------------------------
+# [[tasks]]
+# name = "compilation"
+# phrases = ["lance la compilation", "compile le projet"]
+# exec = "cargo build --release"
+# cwd = "~/projets/cnvs-clone"
+# announce = true          # annonce vocale à la fin
+# notify = true            # notification bureau
 
 # ----------------------------------------------------------------------------
 # Commandes personnalisées : une phrase (ou plusieurs) → un script shell.

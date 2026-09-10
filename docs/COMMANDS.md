@@ -58,7 +58,17 @@ Plusieurs commandes dans une phrase : « ouvre le terminal **et** va sur le work
 | `session_open` | ouvre ma session **vidéo** · *phrases déclarées dans [[sessions]]* | open my video session |
 | `session_save` | sauvegarde la session sous **montage** | save the session as … |
 | `ask_llm` | pourquoi … · comment … · explique-moi … · c'est quoi … · question : … · *toute phrase inconnue si `llm.fallback_nlu`* | why … · how … · explain … · what is … |
-| `ask_agent` *(expérimental)* | demande à Claude **d'écrire un haïku** · Claude, … | ask Claude to … |
+| `ask_agent` | demande à **Claude** / **OpenCode** / **Codex** / **Gemini** de … (dans le projet X) · lance un agent pour … | ask Claude to … · run an agent to … |
+| `task_run` | lance la compilation (*phrase déclarée dans [[tasks]]*) · lance la tâche **build** | run task build |
+| `task_watch` | surveille **la compilation** (tâche déclarée ou processus existant) | watch the build · keep an eye on cargo |
+| `task_status` | où en est la compilation ? · mes tâches · état des tâches | how is the build? · tasks |
+| `task_cancel` | annule la compilation · stoppe le téléchargement | cancel the build |
+| `task_result` | lis le résultat (de la compilation) · qu'a répondu Claude ? | read the result · what did Claude say? |
+| `open_project` | ouvre le projet **cnvs-clone** | open the project iris |
+| `type_and_enter` | envoie : **lance les tests** · dis au terminal npm test | send: npm test · tell the terminal … |
+| `dictation_start_enter` | mode terminal · mode prompt | terminal mode |
+| `remember` / `forget` / `forget_all` / `recall` | retiens que **mon éditeur est Zed** · souviens-toi que … / oublie mon éditeur / oublie tout / qu'est-ce que tu sais de moi ? | remember that … / forget … / forget everything / what do you know about me? |
+| `session_resume` | reprends ma session d'hier · reprends ma dernière session | resume my last session |
 | `custom` | vos phrases (`[[commands]]`), correspondance floue ≥ 85 % | idem |
 
 ## Réponses d'Iris

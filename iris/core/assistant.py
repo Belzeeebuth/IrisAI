@@ -20,6 +20,7 @@ import time
 from collections.abc import Callable
 from enum import StrEnum
 
+from iris.actions import hyprland, notify
 from iris.audio.playback import play_pcm
 from iris.audio.sounds import ack_beep
 from iris.config import Config
@@ -30,6 +31,17 @@ from iris.nlu.intents import Intent, IntentParser, parse_yes_no
 from iris.nlu.split import split_commands
 
 log = logging.getLogger(__name__)
+
+# Intentions « fourre-tout » dont l'objet est libre : un mot final ambigu leur appartient rarement.
+_GENERIC_INTENTS = {
+    "open_app",
+    "close_app",
+    "web_search",
+    "say",
+    "type_text",
+    "type_and_enter",
+    "ask_llm",
+}
 
 
 class State(StrEnum):
@@ -76,6 +88,10 @@ class Assistant:
         self._ignore_before = 0.0  # audio capté avant cet instant = notre propre voix
         self._wake_requested = False  # push-to-talk (signal) à traiter dans la boucle
         self._pause_requested = False
+        self._dictation_enter = False
+        self._pending_events: list = []  # fins de tâches à annoncer quand l'état le permet
+        self._last_snapshot = 0.0
+        self._snapshots_enabled = False
         self.running = False
         self._tts_takes_language = "language" in inspect.signature(tts.speak).parameters
 
@@ -143,11 +159,31 @@ class Assistant:
         if self.wake is not None:
             match = self.wake.match(text)
             if match is not None:
-                text = match.remainder
-                if not text:
+                remainder = self._command_from_match(text, match)
+                if not remainder:
                     self._enter_active()
                     return Reply(self.p.get("ack"))
+                text = remainder
         return self.process_command(text)
+
+    def _command_from_match(self, text: str, match) -> str:
+        """Mot d'activation en fin de phrase : « ouvre le projet iris » parle du projet nommé iris.
+
+        On préfère la phrase entière quand le reste n'est pas une commande, ou quand le reste ne donne
+        qu'une intention générique (ouvrir/fermer une application, recherche…) alors que la phrase
+        entière donne une intention précise (projet, session…).
+        """
+        if match.position != "suffix" or not match.remainder:
+            return match.remainder
+        rest = self.parser.parse(match.remainder)
+        full = self.parser.parse(text)
+        if full is None:
+            return match.remainder
+        if rest is None:
+            return text
+        if rest.name in _GENERIC_INTENTS and full.name not in _GENERIC_INTENTS:
+            return text
+        return match.remainder
 
     def process_command(self, text: str) -> Reply | None:
         parts = split_commands(text, self._intent_name_of)
@@ -217,6 +253,8 @@ class Assistant:
 
     def _execute(self, intent: Intent) -> Reply:
         reply = self.router.execute(intent)
+        if reply.stream is not None:
+            return self._execute_stream(intent, reply)
         text = reply.text
         if reply.ok and reply.keep_listening and reply.control is None:
             text += self.p.get("follow_up")
@@ -224,6 +262,33 @@ class Assistant:
         self._apply_control(reply)
         if reply.control is None:
             self._after_reply(reply)
+        return reply
+
+    def _execute_stream(self, intent: Intent, reply: Reply) -> Reply:
+        """Réponse LLM en streaming : chaque phrase est prononcée dès qu'elle est complète."""
+        spoken: list[str] = []
+        self._status("thinking", intent.text[:80])
+        try:
+            for sentence in reply.stream:
+                if sentence:
+                    spoken.append(sentence)
+                    self.speak(sentence)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("LLM en streaming : %s", exc)
+            if not spoken:
+                self.speak(self.p.get("llm_failed", reason=str(exc)))
+                reply.ok = False
+        finally:
+            self._restore_status()
+        reply.text = " ".join(spoken)
+        if not spoken and reply.ok:
+            self.speak(self.p.get("not_understood"))
+            reply.ok = False
+        if self.journal is not None:
+            self.journal.log_action(
+                intent.name, intent.slots, intent.text, reply.ok, reply.text[:500]
+            )
+        self._after_reply(reply)
         return reply
 
     def _apply_control(self, reply: Reply) -> None:
@@ -237,7 +302,8 @@ class Assistant:
         elif reply.control == "resume":
             self._set_state(State.IDLE)
         elif reply.control == "dictate":
-            self._set_state(State.DICTATING)
+            self._dictation_enter = bool(reply.data.get("enter"))
+            self._set_state(State.DICTATING, "terminal" if self._dictation_enter else "")
         elif reply.control == "dictate_stop":
             self._set_state(State.IDLE)
 
@@ -288,7 +354,8 @@ class Assistant:
             self.speak(reply.text)
             self._apply_control(reply)
             return reply
-        reply = self.router.execute(Intent("type_text", {"text": text}, text=text))
+        name = "type_and_enter" if self._dictation_enter else "type_text"
+        reply = self.router.execute(Intent(name, {"text": text}, text=text))
         if not reply.ok:
             self.speak(reply.text)
         return reply
@@ -323,7 +390,7 @@ class Assistant:
             return
 
         if self.state == State.ACTIVE:
-            command = match.remainder if match is not None else text
+            command = self._command_from_match(text, match) if match is not None else text
             if not command:
                 self._enter_active()
                 return
@@ -348,10 +415,11 @@ class Assistant:
         if match is None:
             self._journal(text, wake=False, handled=False)
             return
-        if not match.remainder:
+        command = self._command_from_match(text, match)
+        if not command:
             self._enter_active()
         else:
-            self.process_command(match.remainder)
+            self.process_command(command)
         self._journal(text, wake=True, handled=True)
 
     def on_wake_detected(self) -> None:
@@ -394,6 +462,67 @@ class Assistant:
             self.speak(self.p.get("confirm_timeout"))
         elif self.state == State.PAUSED and now > self._deadline:
             self._set_state(State.IDLE)
+        self._announce_tasks()
+        self._maybe_snapshot()
+
+    # ================================================================== tâches en arrière-plan
+    def _announce_tasks(self) -> None:
+        tasks = getattr(self.router, "tasks", None)
+        if tasks is not None:
+            self._pending_events.extend(tasks.events())
+        if not self._pending_events or self.state not in (State.IDLE, State.ACTIVE):
+            return
+        events, self._pending_events = self._pending_events, []
+        for event in events:
+            task = event.task
+            text = self.router.format_task_event(task)
+            self.on_event("task", text)
+            if task.notify and self.cfg.system.notify:
+                notify.send(
+                    self.cfg.assistant.name,
+                    text
+                    if task.kind != "agent"
+                    else f"{task.meta.get('label', 'Agent')} : {task.summary(1500)}",
+                    urgency="normal" if task.ok else "critical",
+                )
+            if task.announce:
+                self.speak(text)
+
+    # ================================================================== reprise de session
+    def _maybe_snapshot(self, force: bool = False) -> None:
+        if not self._snapshots_enabled or not self.cfg.memory.enabled:
+            return
+        interval = max(1, self.cfg.memory.snapshot_interval_min) * 60
+        if not force and self.clock() - self._last_snapshot < interval:
+            return
+        self._last_snapshot = self.clock()
+        if not hyprland.available():
+            return
+        try:
+            self.router.sessions.save("last")
+        except Exception as exc:  # noqa: BLE001
+            log.debug("instantané de session non pris : %s", exc)
+
+    def maybe_suggest_resume(self) -> bool:
+        """Au démarrage (opt-in) : propose de rouvrir la session précédente."""
+        if not (
+            self.cfg.assistant.resume_prompt
+            and self.cfg.memory.enabled
+            and self.journal is not None
+        ):
+            return False
+        session = self.router.sessions.find("last")
+        updated = self.journal.pref_updated("session.last")
+        if session is None or updated is None or len(session.apps) < 2:
+            return False
+        if time.time() - updated < self.cfg.memory.resume_min_age_min * 60:
+            return False
+        apps = ", ".join(sorted({a.exec.split()[0].rsplit("/", 1)[-1] for a in session.apps}))
+        self._pending = Intent("session_resume", text="startup")
+        self._set_state(State.CONFIRMING, "reprise")
+        self._deadline = self.clock() + self.cfg.assistant.confirm_timeout_s * 2
+        self.speak(self.p.get("resume_question", apps=apps))
+        return True
 
     def _journal(self, text: str, wake: bool, handled: bool) -> None:
         if self.journal is not None:
@@ -407,7 +536,10 @@ class Assistant:
         self.running = True
         sample_rate = self.cfg.audio.sample_rate
         self._set_state(State.IDLE)
+        self._snapshots_enabled = True
+        self._last_snapshot = self.clock()
         log.info("Iris écoute (mot d'activation : %s)", self.cfg.wake.backend)
+        self.maybe_suggest_resume()
         try:
             for ts, frame in capture.frames():
                 if not self.running:
@@ -443,6 +575,10 @@ class Assistant:
                     self.on_utterance(text, getattr(self.stt, "last_language", None))
         finally:
             self.running = False
+            self._maybe_snapshot(force=True)
+            tasks = getattr(self.router, "tasks", None)
+            if tasks is not None:
+                tasks.shutdown()
             if self.status is not None:
                 self.status.write("off")
 

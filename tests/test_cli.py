@@ -85,3 +85,26 @@ def test_voices_list_elevenlabs_without_key(monkeypatch, capsys) -> None:
     monkeypatch.delenv("ELEVENLABS_API_KEY", raising=False)
     assert main(["voices", "list", "--engine", "elevenlabs"]) == 1
     assert "ELEVENLABS_API_KEY" in capsys.readouterr().err
+
+
+def test_memory_and_tasks_cli(capsys) -> None:
+    assert main(["memory", "remember", "mon", "éditeur", "est", "Zed"]) == 0
+    assert main(["memory"]) == 0
+    assert "mon éditeur : Zed" in capsys.readouterr().out
+    assert main(["memory", "forget", "éditeur"]) == 0
+    assert main(["memory", "clear"]) == 0
+    assert main(["tasks"]) == 0
+    assert "Aucune tâche" in capsys.readouterr().out
+
+
+def test_agents_and_projects_cli(capsys, tmp_path, monkeypatch) -> None:
+    assert main(["agents"]) == 0
+    assert "claude" in capsys.readouterr().out
+    (tmp_path / "code" / "demo").mkdir(parents=True)
+    path = tmp_path / ".config" / "iris" / "config.toml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(f'[system]\nproject_dirs = ["{tmp_path / "code"}"]\n', encoding="utf-8")
+    assert main(["projects"]) == 0
+    assert "demo" in capsys.readouterr().out
+    assert main(["projects", "demo"]) == 0
+    assert main(["projects", "zzz"]) == 1

@@ -140,6 +140,22 @@ def _parser() -> argparse.ArgumentParser:
     llm_sub.add_parser("models", help="liste les modèles disponibles chez le provider")
     llm_sub.add_parser("info", help="provider, URL, modèle, clé présente ?")
 
+    tasks = sub.add_parser("tasks", help="historique des tâches et agents lancés")
+    tasks.add_argument("--last", type=int, default=15)
+
+    memory = sub.add_parser("memory", help="mémoire persistante (faits)")
+    memory_sub = memory.add_subparsers(dest="memory_cmd", required=False)
+    memory_sub.add_parser("list")
+    mf = memory_sub.add_parser("forget")
+    mf.add_argument("fact", nargs="+")
+    mr = memory_sub.add_parser("remember")
+    mr.add_argument("fact", nargs="+")
+    memory_sub.add_parser("clear")
+
+    sub.add_parser("agents", help="agents IA disponibles (claude, opencode, codex, gemini)")
+    projects = sub.add_parser("projects", help="projets connus (config + dossiers de projets)")
+    projects.add_argument("query", nargs="?", default=None)
+
     service = sub.add_parser("service", help="service systemd utilisateur")
     service_sub = service.add_subparsers(dest="service_cmd", required=True)
     si = service_sub.add_parser("install")
@@ -629,6 +645,72 @@ def cmd_llm(cfg: Config, args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_tasks(cfg: Config, args: argparse.Namespace) -> int:
+    import time
+
+    from iris.app import build_journal
+
+    rows = build_journal(cfg).recent_tasks(args.last)
+    if not rows:
+        print("Aucune tâche enregistrée.")
+        return 0
+    for r in reversed(rows):
+        when = time.strftime("%Y-%m-%d %H:%M", time.localtime(r["started"]))
+        mark = {"done": "✓", "failed": "✗", "cancelled": "–"}.get(r["status"], "…")
+        dur = f"{int((r['finished'] or time.time()) - r['started'])}s"
+        print(f"{when} {mark} [{r['kind']}] {r['name']} ({dur}) — {r['output'][-120:].strip()!s}")
+    return 0
+
+
+def cmd_memory(cfg: Config, args: argparse.Namespace) -> int:
+    from iris.app import build_journal
+    from iris.core.memory import Memory
+
+    memory = Memory(build_journal(cfg), cfg.memory.max_facts)
+    cmd = args.memory_cmd or "list"
+    if cmd == "list":
+        facts = memory.facts()
+        if not facts:
+            print('Mémoire vide. Dis « Iris, retiens que … » ou : iris memory remember "…"')
+        for f in facts:
+            print(f"- {f.sentence()}")
+    elif cmd == "remember":
+        print(f"Noté : {memory.remember(' '.join(args.fact), source='cli').sentence()}")
+    elif cmd == "forget":
+        removed = memory.forget(" ".join(args.fact))
+        print(f"Oublié : {removed.sentence()}" if removed else "Rien trouvé.")
+    elif cmd == "clear":
+        print(f"{memory.forget_all()} fait(s) effacé(s).")
+    return 0
+
+
+def cmd_agents(cfg: Config, args: argparse.Namespace) -> int:
+    from iris.agents.runner import PRESETS, AgentRunner
+    from iris.core.tasks import TaskManager
+
+    runner = AgentRunner(cfg.agents, TaskManager())
+    print(f"agents.enabled = {runner.enabled} ; défaut : {cfg.agents.default}")
+    for name in PRESETS:
+        ok = runner.available(name)
+        print(
+            f"  {'✓' if ok else '✗'} {name:10} {PRESETS[name]['bin']:10} {'prêt' if ok else 'CLI introuvable'}"
+        )
+    return 0
+
+
+def cmd_projects(cfg: Config, args: argparse.Namespace) -> int:
+    from iris.actions.projects import ProjectResolver
+
+    resolver = ProjectResolver(cfg.projects, cfg.system.project_dirs)
+    if args.query:
+        path = resolver.resolve(args.query)
+        print(path or "introuvable")
+        return 0 if path else 1
+    for name, path in sorted(resolver.candidates().items()):
+        print(f"{name:30} {path}")
+    return 0
+
+
 def cmd_service(cfg: Config, args: argparse.Namespace) -> int:
     from iris import service
 
@@ -662,6 +744,10 @@ COMMANDS = {
     "status": cmd_status,
     "trigger": cmd_trigger,
     "llm": cmd_llm,
+    "tasks": cmd_tasks,
+    "memory": cmd_memory,
+    "agents": cmd_agents,
+    "projects": cmd_projects,
 }
 
 

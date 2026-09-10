@@ -25,6 +25,7 @@ class AssistantConfig:
     follow_up_window_s: float = 5.0
     confirm_timeout_s: float = 12.0
     ack_sound: bool = True
+    resume_prompt: bool = False  # au démarrage : « Veux-tu reprendre ta session d'hier ? »
 
 
 @dataclass
@@ -136,16 +137,53 @@ class SystemConfig:
     search_url: str = "https://duckduckgo.com/?q={q}"
     notify: bool = True
     typing_tool: str = "auto"  # auto | wtype | ydotool | clipboard
+    project_dirs: list[str] = field(
+        default_factory=lambda: [
+            "~/projets",
+            "~/projects",
+            "~/Projects",
+            "~/code",
+            "~/dev",
+            "~/src",
+            "~/work",
+        ]
+    )
     status_file: str = ""  # vide = $XDG_RUNTIME_DIR/iris/state.json
     waybar_signal: int = 0  # ex. 8 → pkill -RTMIN+8 waybar à chaque changement d'état
 
 
 @dataclass
 class AgentsConfig:
+    enabled: bool = False
+    default: str = "claude"  # claude | opencode | codex | gemini
+    timeout_s: int = 600
+    workdir: str = ""  # dossier par défaut (vide = dossier personnel)
+    bins: dict[str, str] = field(default_factory=dict)  # [agents.bins] claude = "/chemin/claude"
+    # anciens noms (0.1 / 0.2), toujours acceptés
     claude_code_enabled: bool = False
     claude_bin: str = "claude"
     claude_timeout_s: int = 180
     claude_workdir: str = ""
+
+
+@dataclass
+class MemoryConfig:
+    enabled: bool = True
+    snapshot_interval_min: int = (
+        10  # instantané « last » des fenêtres ouvertes (reprise de session)
+    )
+    resume_min_age_min: int = 60  # âge minimal de l'instantané pour proposer une reprise
+    max_facts: int = 200
+
+
+@dataclass
+class BackgroundTask:
+    name: str
+    phrases: list[str]
+    exec: str
+    cwd: str = ""
+    announce: bool = True
+    notify: bool = True
 
 
 @dataclass
@@ -169,6 +207,10 @@ class LLMConfig:
     context: bool = True  # fenêtre active, workspace, heure, dernières actions dans le prompt
     history_turns: int = 6
     system_prompt_extra: str = ""
+    stream: bool = True  # réponses parlées phrase par phrase pendant la génération
+    tools: bool = (
+        True  # petits outils pour le modèle (calcul, presse-papiers, fichier, mémoire, tâches)
+    )
 
 
 @dataclass
@@ -205,7 +247,10 @@ class Config:
     system: SystemConfig = field(default_factory=SystemConfig)
     agents: AgentsConfig = field(default_factory=AgentsConfig)
     llm: LLMConfig = field(default_factory=LLMConfig)
+    memory: MemoryConfig = field(default_factory=MemoryConfig)
     apps: dict[str, str] = field(default_factory=dict)
+    projects: dict[str, str] = field(default_factory=dict)
+    tasks: list[BackgroundTask] = field(default_factory=list)
     bluetooth: dict[str, str] = field(default_factory=dict)
     commands: list[CustomCommand] = field(default_factory=list)
     sessions: list[Session] = field(default_factory=list)
@@ -233,6 +278,7 @@ SECTION_TYPES: dict[str, type] = {
     "system": SystemConfig,
     "agents": AgentsConfig,
     "llm": LLMConfig,
+    "memory": MemoryConfig,
 }
 
 
@@ -276,6 +322,30 @@ def config_from_dict(data: dict[str, Any], source: Path | None = None) -> Config
     cfg.apps = {str(k): str(v) for k, v in apps.items()} if isinstance(apps, dict) else {}
     bt = data.get("bluetooth", {})
     cfg.bluetooth = {str(k): str(v) for k, v in bt.items()} if isinstance(bt, dict) else {}
+    projects = data.get("projects", {})
+    cfg.projects = (
+        {str(k): str(v) for k, v in projects.items()} if isinstance(projects, dict) else {}
+    )
+
+    tasks: list[BackgroundTask] = []
+    for i, raw_t in enumerate(data.get("tasks", []) or []):
+        if not isinstance(raw_t, dict) or not raw_t.get("exec"):
+            log.warning("[[tasks]] n°%d ignorée : 'exec' est obligatoire", i + 1)
+            continue
+        phrases = raw_t.get("phrases") or [str(raw_t.get("name") or f"tache-{i + 1}")]
+        if isinstance(phrases, str):
+            phrases = [phrases]
+        tasks.append(
+            BackgroundTask(
+                name=str(raw_t.get("name") or f"tache-{i + 1}"),
+                phrases=[str(p) for p in phrases],
+                exec=str(raw_t["exec"]),
+                cwd=str(raw_t.get("cwd", "")),
+                announce=bool(raw_t.get("announce", True)),
+                notify=bool(raw_t.get("notify", True)),
+            )
+        )
+    cfg.tasks = tasks
 
     sessions: list[Session] = []
     for i, raw_s in enumerate(data.get("sessions", []) or []):

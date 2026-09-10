@@ -36,7 +36,7 @@ def parse(text: str, sessions=None) -> Intent:
 def test_type_text_and_dictation(router, fake_system):
     reply = router.execute(parse("écris : bonjour à tous"))
     assert reply.ok and reply.text == "C'est écrit."
-    assert ["wtype", "--", "bonjour a tous"] in fake_system.calls
+    assert ["wtype", "--", "bonjour à tous"] in fake_system.calls
     assert router.execute(parse("mode dictée")).control == "dictate"
     assert router.execute(parse("fin de dictée")).control == "dictate_stop"
 

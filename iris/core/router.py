@@ -30,11 +30,14 @@ from iris.actions import (
     web,
 )
 from iris.actions.apps import AppResolver
+from iris.actions.projects import ProjectResolver
 from iris.actions.sessions import SessionManager
 from iris.config import Config
 from iris.core.journal import Journal
 from iris.core.phrasebook import Phrasebook
+from iris.core.tasks import Task, TaskManager, human_duration
 from iris.nlu.intents import CONFIRM_INTENTS, Intent
+from iris.nlu.normalize import canonical
 
 log = logging.getLogger(__name__)
 
@@ -46,6 +49,7 @@ class Reply:
     keep_listening: bool = True  # garder la fenêtre d'enchaînement après la réponse
     data: dict[str, Any] = field(default_factory=dict)
     control: str | None = None  # "stop" | "pause" | "resume" | "dictate" | "dictate_stop"
+    stream: Any = None  # itérateur de phrases (réponse LLM en streaming)
 
     def __str__(self) -> str:
         return self.text
@@ -61,6 +65,10 @@ class Router:
         agent=None,
         brain=None,
         sessions: SessionManager | None = None,
+        tasks: TaskManager | None = None,
+        memory=None,
+        agents=None,
+        projects: ProjectResolver | None = None,
     ) -> None:
         self.cfg = cfg
         self.p = phrases
@@ -71,6 +79,13 @@ class Router:
         self.agent = agent
         self.brain = brain
         self.sessions = sessions or SessionManager(cfg.sessions, journal, self.apps)
+        self.tasks = tasks or TaskManager(journal)
+        self.memory = memory
+        self.agents = agents
+        self.projects = projects or ProjectResolver(
+            cfg.projects, cfg.system.project_dirs, self.apps
+        )
+        self.background = {canonical(t.name): t for t in cfg.tasks}
 
     @property
     def lang(self) -> str:
@@ -123,7 +138,7 @@ class Router:
                 log.exception("Échec inattendu de l'intention %s", intent.name)
                 reply = Reply(self.p.get("error", reason=str(exc)), ok=False)
         duration_ms = int((time.monotonic() - started) * 1000)
-        if self.journal is not None:
+        if self.journal is not None and reply.stream is None:
             self.journal.log_action(
                 intent.name, intent.slots, intent.text, reply.ok, reply.text, duration_ms
             )
@@ -190,6 +205,24 @@ class Router:
         if typing.available_tool(self.cfg.system.typing_tool) is None:
             raise RuntimeError("aucun outil de saisie (installe wtype)")
         return Reply(self.p.get("dictation_started"), keep_listening=False, control="dictate")
+
+    def _h_dictation_start_enter(self, intent: Intent) -> Reply:
+        if typing.available_tool(self.cfg.system.typing_tool) is None:
+            raise RuntimeError("aucun outil de saisie (installe wtype)")
+        return Reply(
+            self.p.get("dictation_started_enter"),
+            keep_listening=False,
+            control="dictate",
+            data={"enter": True},
+        )
+
+    def _h_type_and_enter(self, intent: Intent) -> Reply:
+        text = str(intent.slot("text", ""))
+        tool = typing.type_text(text, self.cfg.system.typing_tool, press_enter=True)
+        return Reply(
+            self.p.get("typed_clipboard") if tool == "clipboard" else self.p.get("typed_enter"),
+            data={"tool": tool},
+        )
 
     def _h_dictation_stop(self, intent: Intent) -> Reply:
         return Reply(self.p.get("dictation_stopped"), keep_listening=False, control="dictate_stop")
@@ -446,6 +479,180 @@ class Router:
         n = self.sessions.save(name)
         return Reply(self.p.get("session_saved", name=name, n=n, s=self._plural(n)))
 
+    def _h_session_resume(self, intent: Intent) -> Reply:
+        if self.sessions.find("last") is None:
+            return Reply(self.p.get("resume_none"), ok=False)
+        name, n = self.sessions.open("last", self._launcher())
+        return Reply(
+            self.p.get(
+                "session_opened",
+                name="précédente" if self.lang == "fr" else "previous",
+                n=n,
+                s=self._plural(n),
+            )
+        )
+
+    # ------------------------------------------------------------------ projets
+    def _h_open_project(self, intent: Intent) -> Reply:
+        name = str(intent.slot("name", ""))
+        try:
+            label, _path = self.projects.open(name, self._launcher())
+        except RuntimeError as exc:
+            if "introuvable" in str(exc):
+                return Reply(self.p.get("project_not_found", name=name), ok=False)
+            raise
+        return Reply(self.p.get("project_opened", name=label))
+
+    # ------------------------------------------------------------------ mémoire
+    def _memory(self):
+        if self.memory is None:
+            raise RuntimeError("mémoire désactivée (memory.enabled = false)")
+        return self.memory
+
+    def _h_remember(self, intent: Intent) -> Reply:
+        fact = str(intent.slot("fact", "")).strip()
+        if not fact:
+            return Reply(self.p.get("not_understood"), ok=False)
+        self._memory().remember(fact)
+        return Reply(self.p.get("remembered"))
+
+    def _h_forget(self, intent: Intent) -> Reply:
+        removed = self._memory().forget(str(intent.slot("fact", "")))
+        if removed is None:
+            return Reply(self.p.get("forget_none"), ok=False)
+        return Reply(self.p.get("forgotten", fact=removed.sentence()))
+
+    def _h_forget_all(self, intent: Intent) -> Reply:
+        self._memory().forget_all()
+        if self.brain is not None and hasattr(self.brain, "forget"):
+            self.brain.forget()
+        return Reply(self.p.get("forgot_all"))
+
+    def _h_recall(self, intent: Intent) -> Reply:
+        facts = self._memory().facts()
+        if not facts:
+            return Reply(self.p.get("recall_none"))
+        listed = "; ".join(f.sentence() for f in facts[-8:])
+        return Reply(self.p.get("recall_intro") + listed + ".")
+
+    # ------------------------------------------------------------------ tâches
+    def _background_task(self, name: str):
+        q = canonical(name)
+        if q in self.background:
+            return self.background[q]
+        for key, task in self.background.items():
+            if q in key or key in q:
+                return task
+        return None
+
+    def _h_task_run(self, intent: Intent) -> Reply:
+        name = str(intent.slot("name", ""))
+        spec = self._background_task(name)
+        if spec is None:
+            return Reply(self.p.get("task_not_found", name=name), ok=False)
+        task = self.tasks.run(
+            spec.name, spec.exec, cwd=spec.cwd or None, announce=spec.announce, notify=spec.notify
+        )
+        return Reply(self.p.get("task_started", name=spec.name), data={"task_id": task.id})
+
+    def _h_task_watch(self, intent: Intent) -> Reply:
+        name = str(intent.slot("name", ""))
+        spec = self._background_task(name)
+        if spec is not None:
+            task = self.tasks.run(
+                spec.name,
+                spec.exec,
+                cwd=spec.cwd or None,
+                announce=spec.announce,
+                notify=spec.notify,
+            )
+            return Reply(self.p.get("task_started", name=spec.name), data={"task_id": task.id})
+        task = self.tasks.watch(name)
+        return Reply(self.p.get("task_watch_started", name=name), data={"task_id": task.id})
+
+    def _h_task_status(self, intent: Intent) -> Reply:
+        name = intent.slot("name")
+        if name:
+            task = self.tasks.find(str(name))
+            if task is None:
+                return Reply(self.p.get("task_not_found", name=str(name)), ok=False)
+            if task.status == "running":
+                return Reply(
+                    self.p.get(
+                        "task_status_running",
+                        items=self.p.get(
+                            "task_status_one",
+                            name=task.name,
+                            duration=human_duration(task.duration_s, self.lang),
+                        ),
+                    )
+                )
+            return Reply(
+                self.p.get(
+                    "task_last",
+                    name=task.name,
+                    status=self.p.get(f"status_{task.status}"),
+                ).strip()
+            )
+        running = self.tasks.running()
+        text = ""
+        if running:
+            items = ", ".join(
+                self.p.get(
+                    "task_status_one", name=t.name, duration=human_duration(t.duration_s, self.lang)
+                )
+                for t in running
+            )
+            text = self.p.get("task_status_running", items=items)
+        else:
+            text = self.p.get("task_none_running")
+        last = self.tasks.last_finished()
+        if last is not None:
+            text += self.p.get(
+                "task_last", name=last.name, status=self.p.get(f"status_{last.status}")
+            )
+        return Reply(text)
+
+    def _h_task_cancel(self, intent: Intent) -> Reply:
+        name = str(intent.slot("name", ""))
+        task = self.tasks.cancel(name)
+        if task is None:
+            return Reply(self.p.get("task_not_found", name=name), ok=False)
+        return Reply(self.p.get("task_cancelled", name=task.name))
+
+    def _h_task_result(self, intent: Intent) -> Reply:
+        agent = intent.slot("agent") or intent.slot("agent2")
+        name = intent.slot("name")
+        task = (
+            self.tasks.find(str(name))
+            if name
+            else self.tasks.last_finished("agent" if agent else None)
+        )
+        if task is None or task.status == "running":
+            return Reply(self.p.get("task_result_none"), ok=False)
+        summary = task.summary(300) or ("(aucune sortie)" if self.lang == "fr" else "(no output)")
+        return Reply(
+            self.p.get("task_result", name=task.name, summary=summary),
+            data={"notify": True, "answer": task.summary(2000)},
+        )
+
+    def format_task_event(self, task: Task) -> str:
+        """Phrase d'annonce à la fin d'une tâche (utilisée par l'assistant)."""
+        duration = human_duration(task.duration_s, self.lang)
+        if task.kind == "agent":
+            label = task.meta.get("label", "l'agent")
+            summary = task.summary(300) or (
+                "terminé sans réponse" if self.lang == "fr" else "finished without output"
+            )
+            return self.p.get(
+                "agent_done" if task.ok else "agent_failed", agent=label, summary=summary
+            )
+        if task.kind == "watch":
+            return self.p.get("task_watch_done", name=task.name)
+        if task.ok:
+            return self.p.get("task_done", name=task.name, duration=duration)
+        return self.p.get("task_failed", name=task.name, duration=duration, code=task.returncode)
+
     # ------------------------------------------------------------------ alimentation
     def _h_suspend(self, intent: Intent) -> Reply:
         power.suspend()
@@ -496,6 +703,12 @@ class Router:
         if self.brain is None:
             return Reply(self.p.get("llm_disabled"), ok=False)
         question = intent.text or str(intent.slot("prompt", ""))
+        if self.cfg.llm.stream and hasattr(self.brain, "converse_stream"):
+            return Reply(
+                "",
+                stream=self.brain.converse_stream(question, self.lang),
+                data={"question": question},
+            )
         try:
             answer = self.brain.converse(question, self.lang)
         except Exception as exc:  # noqa: BLE001
@@ -503,15 +716,12 @@ class Router:
         return Reply(answer or self.p.get("not_understood"), data={"answer": answer})
 
     def _h_ask_agent(self, intent: Intent) -> Reply:
-        if self.agent is None or not getattr(self.agent, "enabled", False):
-            return Reply(self.p.get("agent_disabled"), ok=False)
-        if not self.agent.available():
-            return Reply(self.p.get("agent_unavailable"), ok=False)
-        prompt = str(intent.slot("prompt", ""))
-        try:
-            answer = self.agent.ask(prompt)
-        except Exception as exc:  # noqa: BLE001
-            return Reply(self.p.get("agent_failed", reason=str(exc)), ok=False)
-        return Reply(
-            self.p.get("agent_answer", answer=answer), data={"notify": True, "answer": answer}
-        )
+        if self.agents is None or not getattr(self.agents, "enabled", False):
+            return Reply(self.p.get("agents_disabled"), ok=False)
+        name = str(intent.slot("agent") or intent.slot("agent2") or "")
+        prompt = str(intent.slot("prompt", "")).strip()
+        if not prompt:
+            return Reply(self.p.get("not_understood"), ok=False)
+        task = self.agents.run(name, prompt)
+        label = task.meta.get("label", name or "l'agent")
+        return Reply(self.p.get("agent_started", agent=label), data={"task_id": task.id})

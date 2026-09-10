@@ -84,8 +84,13 @@ Réponse attendue (décision) : `{"action": "<intention>", "slots": {…}, "say"
 
 Une décision consomme ~1 000 tokens d'entrée (prompt système + contexte) et quelques dizaines en sortie. Avec `glm-5.3-flash` (0,15 $ / M tokens en entrée), cent phrases hors règles par jour coûtent ~0,5 $ par mois. Latence typique 1-3 s ; le widget Waybar affiche « réfléchit » pendant ce temps et Iris reste muette (pas de « hmm »).
 
+## Streaming, outils, mémoire (phase 3)
+
+- **Streaming** (`llm.stream = true`) : les réponses aux questions arrivent en SSE et sont lues phrase par phrase ; la première phrase part en une à deux secondes.
+- **Outils** (`llm.tools = true`) : avant de décider, le modèle peut demander un outil — `{"tool": "calc", "args": {"expression": "15 % de 240"}}`, `clipboard`, `read_file` (dossier personnel, 20 000 caractères), `recall`, `tasks` — puis reçoit le résultat et décide. Un seul appel par phrase.
+- **Mémoire** : les faits (« retiens que … ») sont injectés dans le prompt système ; l'historique de conversation est persistant (SQLite) et transmis sur `history_turns` tours. `iris memory clear` et « oublie tout » remettent à zéro.
+
 ## Limites actuelles
 
-- Appel synchrone (pas de streaming de la réponse).
-- L'historique ne survit pas au redémarrage (mémoire persistante : phase 3).
+- Les décisions (phrase hors règles) restent synchrones ; seules les réponses aux questions sont en streaming.
 - Le client est testé contre des réponses simulées ; les identifiants de modèles proviennent de la documentation OpenCode (septembre 2026) et peuvent évoluer : `iris llm models` fait foi.

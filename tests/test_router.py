@@ -148,7 +148,7 @@ def test_open_app_not_found(router, fake_system):
 def test_web_search_and_url(router, fake_system):
     router.execute(parse("cherche des crêpes sur internet"))
     router.execute(parse("ouvre github.com"))
-    assert ["xdg-open", "https://duckduckgo.com/?q=des+crepes"] in fake_system.launched
+    assert ["xdg-open", "https://duckduckgo.com/?q=des+cr%C3%AApes"] in fake_system.launched
     assert ["xdg-open", "https://github.com"] in fake_system.launched
 
 

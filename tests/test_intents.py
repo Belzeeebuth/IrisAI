@@ -65,11 +65,11 @@ CASES = [
     ("dis-moi l'heure", "time", {}),
     ("what time is it", "time", {}),
     ("quel jour sommes-nous", "date", {}),
-    ("dis bonjour à tout le monde", "say", {"text": "bonjour a tout le monde"}),
+    ("dis bonjour à tout le monde", "say", {"text": "bonjour à tout le monde"}),
     (
         "cherche des recettes de crêpes sur internet",
         "web_search",
-        {"query": "des recettes de crepes"},
+        {"query": "des recettes de crêpes"},
     ),
     ("search for cats", "web_search", {"query": "cats"}),
     ("ouvre github.com", "open_url", {"url": "github.com"}),
@@ -82,7 +82,11 @@ CASES = [
     ("stop", "stop", {}),
     ("mets-toi en pause pendant 10 minutes", "pause_listening", {"minutes": 10}),
     ("reprends l'écoute", "resume_listening", {}),
-    ("demande à Claude d'écrire un haiku", "ask_agent", {"prompt": "d'ecrire un haiku"}),
+    (
+        "demande à Claude d'écrire un haiku",
+        "ask_agent",
+        {"agent": "claude", "prompt": "écrire un haiku"},
+    ),
     ("lance mon workspace de dev", "custom", {"command": "dev"}),
     ("lance mon workspace de dev stp", "custom", {"command": "dev"}),
 ]

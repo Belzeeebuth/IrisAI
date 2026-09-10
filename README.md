@@ -6,7 +6,7 @@
 
 *« Hey Iris, ouvre mon workspace de dev. »*
 
-[![Phase](https://img.shields.io/badge/phase-2%20%C2%B7%20int%C3%A9gration%20syst%C3%A8me-8b5cf6)](#roadmap)
+[![Phase](https://img.shields.io/badge/phase-3%20%C2%B7%20agents%20%26%20m%C3%A9moire-8b5cf6)](#roadmap)
 [![Python](https://img.shields.io/badge/python-3.11%2B-3776ab)](pyproject.toml)
 [![Licence](https://img.shields.io/badge/licence-MIT-green)](LICENSE)
 [![Local](https://img.shields.io/badge/donn%C3%A9es-locales%20par%20d%C3%A9faut-0ea5e9)](docs/PRIVACY.md)
@@ -17,7 +17,7 @@
 
 Iris est un assistant vocal conçu pour [Omarchy](https://omarchy.org) (Arch Linux + Hyprland). Elle se lance avec ta session, écoute en arrière-plan le mot d'activation **« Hey Iris »**, comprend ce que tu dis en français ou en anglais, agit sur le système (applications, workspaces et écrans Hyprland, volume, luminosité, thèmes Omarchy, musique, Bluetooth, Wi-Fi, notifications, dictée…) et te répond avec une **vraie voix IA** (ElevenLabs par défaut, OpenAI ou Cartesia au choix, Kokoro en local si tu veux rester hors-ligne). Quand une phrase sort de ses règles, un **cerveau LLM** (OpenCode Zen ou OpenCode Go, ou n'importe quel endpoint OpenAI-compatible) décide de l'action à faire ou répond à ta question. Par défaut tout tourne **en local** ; le cloud est un choix explicite.
 
-> **État du projet — Phase 2 (intégration système) livrée, cerveau LLM branché, voix cloud premium.** Le cœur est couvert par 281 tests sans matériel. Les clients ElevenLabs, Cartesia, OpenAI et OpenCode sont testés contre des réponses simulées (aucune clé disponible pendant le développement) : leurs paramètres viennent des SDK officiels de septembre 2026. Premiers retours de terrain intégrés : la capture micro et le VAD fonctionnent sur Omarchy, et la transcription bascule seule sur CPU quand CUDA manque. Voir [Limitations connues](#limitations-connues).
+> **État du projet — Phase 3 (agents, tâches, mémoire) livrée.** Le cœur est couvert par 336 tests sans matériel. Les clients ElevenLabs, Cartesia, OpenAI et OpenCode sont testés contre des réponses simulées (aucune clé disponible pendant le développement) : leurs paramètres viennent des SDK officiels de septembre 2026. Premiers retours de terrain intégrés : la capture micro et le VAD fonctionnent sur Omarchy, et la transcription bascule seule sur CPU quand CUDA manque. Voir [Limitations connues](#limitations-connues).
 
 ---
 
@@ -65,8 +65,12 @@ Toutes les phrases ci-dessous fonctionnent en français et en anglais, avec ou s
 | **Sessions** | « ouvre ma session vidéo » · « sauvegarde la session sous montage » | Ensembles d'applications par workspace (`[[sessions]]`), ou instantané des fenêtres ouvertes enregistré dans le journal. |
 | **Plusieurs commandes** | « ouvre le terminal et va sur le workspace 2 » · « ouvre firefox et spotify » | Découpage sur « et / puis / and then », y compris les formes elliptiques. |
 | **Contrôle** | « stop » · « mets-toi en pause pendant 10 minutes » · « reprends l'écoute » · touche push-to-talk (`iris trigger`) | |
-| **Cerveau LLM** | « pourquoi le ciel est bleu ? » · « explique-moi les workspaces » · *toute phrase hors règles* : « c'est beaucoup trop silencieux ici » → *baisse… non, monte le son* | Via **OpenCode Go / Zen** (ou OpenAI, OpenRouter, Ollama local). Le modèle reçoit ta personnalité, la liste des capacités et le contexte (heure, fenêtre active, workspace, dernières actions) et renvoie soit une action Iris (repasse par les confirmations), soit une réponse parlée, soit rien (bruit ambiant). |
-| **Agent IA** *(expérimental)* | « demande à Claude d'écrire un haïku » | Délègue au CLI **Claude Code** authentifié avec ton abonnement claude.ai (`claude login`), **pas de clé API**. Désactivé par défaut. |
+| **Cerveau LLM** | « pourquoi le ciel est bleu ? » · « explique-moi les workspaces » · *toute phrase hors règles* : « il fait trop sombre là » → *luminosité à 60 %* · « ça fait combien 15 % de 240 ? » | Via **OpenCode Go / Zen** (ou OpenAI, OpenRouter, Ollama local). Le modèle reçoit ta personnalité, ta mémoire, la liste des capacités et le contexte (heure, fenêtre active, workspace, dernières actions), peut utiliser un outil (calcul, presse-papiers, fichier, mémoire, tâches), et renvoie soit une action Iris (repasse par les confirmations), soit une réponse parlée **en streaming phrase par phrase**, soit rien (bruit ambiant). |
+| **Tâches en arrière-plan** | « lance la compilation » · « surveille la compilation » · « où en est la compilation ? » · « annule la compilation » · « lis le résultat » | Commandes longues déclarées dans `[[tasks]]` ou processus existants (`pgrep`) ; Iris annonce la fin (succès / échec, durée) à voix haute et par notification, dans un moment calme. |
+| **Agents IA** | « demande à Claude de corriger les tests dans le projet cnvs-clone » · « demande à OpenCode : refactore le module audio » · « lance un agent pour … » · « qu'a répondu Claude ? » | **Claude Code**, **OpenCode**, **Codex**, **Gemini CLI** lancés en arrière-plan dans le dossier du projet, avec la connexion de chaque outil (abonnement claude.ai via `claude login`, **pas de clé API**) ; résumé parlé + notification à la fin. |
+| **Projets** | « ouvre le projet cnvs-clone » | Éditeur + terminal dans le dossier (`[projects]` ou recherche dans `~/projets`, `~/code`, `~/dev`…). |
+| **Voix → terminal** | « envoie : lance les tests » · « dis au terminal npm test » · « mode terminal » … « fin de dictée » | Tape puis valide dans la fenêtre active : parle à un agent qui tourne dans ton terminal (style BridgeVoice). |
+| **Mémoire** | « retiens que mon éditeur est Zed » · « qu'est-ce que tu sais de moi ? » · « oublie mon éditeur » · « reprends ma session d'hier » | Faits persistants injectés dans le prompt du LLM, historique de conversation conservé, instantanés des fenêtres ouvertes et proposition de reprise au démarrage (opt-in). |
 
 Après chaque commande, une courte fenêtre (5 s) permet d'enchaîner sans répéter « Hey Iris ». Une phrase non reconnue dans cette fenêtre est ignorée silencieusement (conversation ambiante) ; après un « Hey Iris » explicite, Iris te dit qu'elle n'a pas compris.
 
@@ -74,16 +78,13 @@ Après chaque commande, une courte fenêtre (5 s) permet d'enchaîner sans rép�
 
 | Pas encore | Prévu en |
 |---|---|
-| Comprendre une demande en langage libre hors des règles (« ouvre-moi un truc pour prendre des notes ») | Phase 3 (LLM local ou Claude Code) |
-| Se souvenir du contexte entre deux sessions (« reprends ma session d'hier ») | Phase 3 (mémoire contextuelle) |
-| Proposer des automatisations d'elle-même (« chaque matin à 9 h… ») | Phase 4 (apprentissage des habitudes) |
-| Dicter du texte dans l'application active (style BridgeVoice) | Phase 2 |
-| Surveiller une tâche longue et notifier à la fin | Phase 3 (agents) |
-| Réagir à un profil de personnalité libre (« parle comme un coach ») au-delà des tons intégrés | Phase 4 |
+| Proposer des automatisations d'elle-même (« chaque matin à 9h… ») à partir des habitudes | Phase 4 (apprentissage) |
+| Un profil de personnalité libre s'applique aux réponses du LLM, pas encore aux réponses « règles » ni à la voix | Phase 4 |
+| Suivre une conversation avec un agent interactif (relire ses questions, y répondre à la voix) : aujourd'hui l'agent tourne en mode non interactif et Iris lit sa réponse finale | Phase 4 |
+| Reprendre une session en restaurant aussi les fichiers ouverts dans l'éditeur (seules les applications et leurs workspaces sont rouverts) | Phase 4 |
+| Widget Quickshell (le module Waybar existe) | Phase 4 |
 | Interrompre Iris pendant qu'elle parle (*barge-in*) | Phase 5 |
 | Détection du mot d'activation sur l'audio brut sans modèle à entraîner | Phase 5 (modèle « hey iris » openWakeWord fourni) |
-| Widget d'état (Waybar / Quickshell) | Phase 2 |
-| Plusieurs langues dans la même session | Phase 4 |
 
 ## Exemple de session
 
@@ -109,7 +110,15 @@ iris  : C'est écrit.
 toi   : Iris, il fait trop sombre là                        ← hors règles → cerveau LLM
 iris  : Luminosité à 60 pour cent.
 toi   : Iris, c'est quoi la différence entre Wayland et X11 ?
-iris  : Wayland est un protocole moderne où le compositeur gère tout directement ; X11 est l'ancien serveur d'affichage… (réponse du modèle, parlée)
+iris  : Wayland est un protocole moderne où le compositeur gère tout directement… (réponse du modèle, lue phrase par phrase)
+toi   : Iris, lance la compilation                          ← tâche déclarée dans [[tasks]]
+iris  : compilation lancé. Je te préviens quand c'est terminé.
+toi   : Iris, demande à Claude de corriger les tests dans le projet cnvs-clone
+iris  : Je demande à Claude. Je te préviens quand c'est prêt.
+      … (deux minutes plus tard, dans un moment calme)
+iris  : compilation terminé en 1 min 40. Claude a terminé : j'ai corrigé les deux tests qui échouaient dans audio_test.rs…
+toi   : Iris, retiens que mon éditeur est Zed
+iris  : C'est noté.
 ```
 
 Le même dialogue fonctionne au clavier avec `iris repl` (pratique pour tester sans micro).
@@ -130,13 +139,14 @@ Le même dialogue fonctionne au clavier avec `iris repl` (pratique pour tester s
      │            (ou openWakeWord sur l'audio, optionnel)
      ▼
    NLU  ── règles fr/en + commandes perso ──▶ Intent(volume_up)
-     │            └── phrase inconnue ──▶ LLM (OpenCode Zen/Go) ──▶ action Iris | réponse | silence
+     │            └── phrase inconnue ──▶ LLM (OpenCode Zen/Go) + mémoire + outils ──▶ action Iris | réponse (streaming) | silence
      ▼
    Routeur ── confirmation si critique ──▶ Action (wpctl / hyprctl / uwsm / omarchy-* / wtype / bluetoothctl…)
      │                                          │
      ▼                                          ▼
-   Journal SQLite (traçabilité)            Réponse ──▶ voix IA (ElevenLabs / OpenAI / Cartesia) ──▶ pw-play
-                                                └──▶ état Waybar ($XDG_RUNTIME_DIR/iris/state.json)
+   Journal SQLite (traçabilité,            Réponse ──▶ voix IA (ElevenLabs / OpenAI / Cartesia) ──▶ pw-play
+   mémoire, tâches)                              └──▶ état Waybar ($XDG_RUNTIME_DIR/iris/state.json)
+   Tâches & agents en arrière-plan ──(fin)──▶ annonce vocale + notification
 ```
 
 Machine à états : `IDLE` → (« Hey Iris ») → `ACTIVE` → (commande) → exécution → `ACTIVE` (fenêtre d'enchaînement) ou `IDLE`. Les intentions critiques passent par `CONFIRMING` (oui / non / délai de 12 s), y compris quand c'est le LLM qui les propose. « Mets-toi en pause » bascule en `PAUSED`, « mode dictée » en `DICTATING`. Pendant qu'Iris parle, le micro est ignoré pour qu'elle ne s'entende pas elle-même. La voix est jouée phrase par phrase pendant que la suivante se synthétise. Détails : [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
@@ -211,6 +221,9 @@ Extras disponibles : `stt` (faster-whisper), `tts` (piper-tts), `audio` (soundde
 | `iris status [--waybar] [--follow]` | État courant (idle, active, thinking, speaking, dictating…) ; format JSON pour Waybar. |
 | `iris trigger [--pause]` | Push-to-talk : réveille l'instance en cours (comme « Hey Iris ») ; `--pause` bascule pause/reprise. |
 | `iris llm info / test "…" / decide "…" / models` | Cerveau LLM : configuration effective, question de test, décision brute pour une phrase, modèles du provider. |
+| `iris tasks [--last N]` | Historique des tâches et agents (statut, durée, fin de sortie). |
+| `iris memory [list / remember "…" / forget "…" / clear]` | Faits mémorisés. |
+| `iris agents` · `iris projects [nom]` | CLI d'agents disponibles ; projets connus et résolution d'un nom. |
 | `iris voices download kokoro [--model …]` · `iris voices list --engine kokoro` | Voix IA locale. |
 | `iris say --backend openai "…"` | Tester un backend de voix précis. |
 | `iris wakeword setup` | Modèles de base openWakeWord (si tu utilises un modèle « hey iris »). |
@@ -342,9 +355,10 @@ iris/
 │                     + brain (décision, contexte)    │   ├── devices.py     bluetooth, wifi, batterie, sortie audio
 ├── nlu/              normalisation, nombres, règles, │   ├── notifications.py (mako), typing.py (dictée)
 │                     découpage multi-commandes        │   ├── power.py, web.py, notify.py
-├── agents/           pont Claude Code (expérimental) │   └── omarchy.py     thèmes, lock, screenshot, webapps
-└── data/             config par défaut, alias apps
-tests/                281 tests (NLU, wake, routeur, machine à états, LLM, voix cloud, VAD, config, journal, CLI)
+├── agents/           runner : claude, opencode, codex,│   ├── projects.py    éditeur + terminal dans un projet
+│                     gemini en arrière-plan          │   └── omarchy.py     thèmes, lock, screenshot, webapps
+└── data/             config par défaut, alias apps   core/tasks.py  tâches + surveillance ; core/memory.py  faits, historique
+tests/                336 tests (NLU, wake, routeur, machine à états, LLM, voix, tâches, mémoire, agents, CLI)
 scripts/install.sh    installation Omarchy            systemd/iris.service   hypr/   contrib/waybar/
 ```
 
@@ -361,7 +375,8 @@ Détail par phase, avec les tâches : [docs/ROADMAP.md](docs/ROADMAP.md).
   - [x] **Voix IA** : ElevenLabs (défaut dès qu'une clé est présente : bibliothèque de voix françaises, réglages d'expressivité, continuité entre phrases), OpenAI `gpt-4o-mini-tts` et serveurs compatibles, Cartesia Sonic, Kokoro local facultatif ; cache disque et lecture phrase par phrase.
   - [x] **Cerveau LLM** (avancé depuis la phase 3) : OpenCode Go / Zen, OpenAI, OpenRouter, Ollama ; repli sur phrase inconnue, questions ouvertes, personnalité, contexte, historique de conversation.
   - [ ] Widget Quickshell (module Waybar livré).
-- [ ] **Phase 3 — Agents + mémoire** : agents en arrière-plan avec surveillance et notification à la fin (« surveille la compilation »), pont Claude Code asynchrone (abonnement claude.ai, pas d'API), mémoire contextuelle persistante (projets ouverts, tâches en cours), proposition de reprise (« reprendre ta session d'hier ? »), transcription voix → prompt dans le terminal actif.
+- [x] **Phase 3 — Agents + mémoire** *(cette version, v0.3)* : tâches en arrière-plan annoncées à la fin (« lance / surveille la compilation »), agents Claude Code / OpenCode / Codex / Gemini lancés à la voix dans le dossier d'un projet (connexion propre à chaque outil, pas de clé API), ouverture de projets, voix → terminal avec Entrée, mémoire persistante (faits, historique LLM), instantanés de session et reprise proposée au démarrage, réponses LLM en streaming, outils du modèle (calcul, presse-papiers, fichier, mémoire, tâches), texte d'origine (accents, majuscules) conservé pour la dictée, les prompts et la mémoire.
+  - [ ] Dialogue suivi avec un agent interactif ; restauration des fichiers ouverts dans l'éditeur.
 - [ ] **Phase 4 — Personnalisation + apprentissage** : profil de personnalité libre, apprentissage des habitudes depuis le journal, suggestions d'automatisations récurrentes, planificateur (« chaque matin à 9 h… »).
 - [ ] **Phase 5 — Mode privé + performances** : chiffrement du journal, effacement automatique, *barge-in*, streaming STT, front-end audio en Rust (VAD + wake word), support Parakeet / whisper.cpp / GPU.
 
@@ -388,7 +403,7 @@ Détail par phase, avec les tâches : [docs/ROADMAP.md](docs/ROADMAP.md).
 - `piper-tts` sur PyPI ne fournit pas toujours de roue pour la toute dernière version de Python d'Arch : le script utilise Python 3.12 via `uv`. Alternative : paquet AUR `piper-tts-bin` (Iris utilise le binaire `piper` s'il est dans le PATH).
 - Les voix ElevenLabs, OpenAI et Cartesia dépendent du réseau : sans connexion, Iris retombe sur Piper (ou la console) et le dit dans le journal. Le cache disque couvre les réponses déjà entendues.
 - Kokoro (local) a été jugée trop synthétique ; elle reste disponible pour un usage hors-ligne mais n'est plus installée par défaut.
-- Le LLM et le pont Claude Code sont synchrones : Iris attend la réponse (quelques secondes, jusqu'à `llm.timeout_s`). Le widget affiche « réfléchit » pendant ce temps.
+- Les décisions du LLM (phrase hors règles) restent synchrones (une à trois secondes, « réfléchit » dans le widget) ; les réponses aux questions sont lues en streaming. Les agents tournent en arrière-plan et Iris ne lit que leur réponse finale.
 - Le client OpenCode Zen / Go est validé par des tests à réponses simulées, pas encore par un appel réel (aucune clé disponible pendant le développement). Les endpoints et modèles viennent de la documentation OpenCode de septembre 2026 ; `iris llm models` liste ce que ton compte voit vraiment.
 - Sauvegarder une session capture les classes de fenêtres et tente d'en déduire la commande : les applications lancées par un script exotique peuvent être manquées.
 
@@ -412,12 +427,15 @@ Détail par phase, avec les tâches : [docs/ROADMAP.md](docs/ROADMAP.md).
 | ElevenLabs : « voix introuvable » | Le nom doit être celui d'une voix **de ton compte** (`iris voices list --engine elevenlabs`) ; une voix de la bibliothèque doit d'abord être ajoutée (`iris voices add`). |
 | La voix a un accent en français | Choisis une voix native : `iris voices library --lang fr --preview N`. |
 | Dictée : rien ne s'écrit | `sudo pacman -S wtype` ; sinon le texte est copié (Ctrl+V). Certaines applis XWayland ignorent wtype : `typing_tool = "ydotool"`. |
+| « Les agents sont désactivés » | `[agents] enabled = true` ; `iris agents` montre les CLI trouvés (`claude`, `opencode`, `codex`, `gemini`) ; connecte-toi une fois dans chaque outil (`claude login`). |
+| « Je ne trouve pas de tâche … » | Déclare-la dans `[[tasks]]` (nom + phrases + exec), ou utilise « surveille <nom du processus> » pour un processus déjà lancé. |
+| Iris ne propose jamais de reprendre la session | `assistant.resume_prompt = true` ; l'instantané doit dater d'au moins `memory.resume_min_age_min` minutes et contenir deux applications. |
 
 ## Développement
 
 ```bash
 uv venv .venv && uv pip install --python .venv/bin/python -e ".[dev]"
-.venv/bin/pytest            # 281 tests, ~2 s, aucun matériel requis
+.venv/bin/pytest            # 336 tests, ~2 s, aucun matériel requis
 .venv/bin/ruff check iris tests && .venv/bin/ruff format iris tests
 .venv/bin/iris repl         # tester la compréhension au clavier
 ```

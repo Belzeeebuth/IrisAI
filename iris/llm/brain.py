@@ -17,12 +17,14 @@ import json
 import logging
 import re
 from collections import deque
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from typing import Any
 
 from iris.config import Config
 from iris.llm.client import LLMClient, LLMError
+from iris.llm.tools import ToolContext, parse_tool_call, run_tool, tools_block
+from iris.tts.base import split_sentences
 
 log = logging.getLogger(__name__)
 
@@ -79,6 +81,24 @@ CAPABILITIES: dict[str, tuple[str, str]] = {
     "dnd_off": ("désactiver ne pas déranger", ""),
     "session_open": ("ouvrir une session de workspaces nommée", "name"),
     "session_save": ("sauvegarder les fenêtres ouvertes comme session", "name"),
+    "session_resume": ("reprendre la dernière session de travail (fenêtres d'hier)", ""),
+    "open_project": ("ouvrir un projet (éditeur + terminal dans son dossier)", "name"),
+    "remember": ("mémoriser un fait sur l'utilisateur", "fact"),
+    "forget": ("oublier un fait", "fact"),
+    "recall": ("dire ce que tu sais de l'utilisateur", ""),
+    "type_and_enter": (
+        "taper un texte dans la fenêtre active puis Entrée (terminal, prompt d'agent)",
+        "text",
+    ),
+    "task_run": ("lancer une tâche longue déclarée par l'utilisateur", "name"),
+    "task_watch": ("surveiller un processus et prévenir à la fin", "name"),
+    "task_status": ("état des tâches et agents", ""),
+    "task_cancel": ("annuler une tâche en cours", "name"),
+    "task_result": ("lire le résultat de la dernière tâche ou de l'agent", ""),
+    "ask_agent": (
+        "confier une mission à un agent IA en arrière-plan (claude, opencode, codex)",
+        "agent, prompt",
+    ),
     "time": ("donner l'heure", ""),
     "date": ("donner la date", ""),
     "say": ("prononcer un texte", "text"),
@@ -105,13 +125,23 @@ class Brain:
         context_provider: Callable[[], dict[str, str]] | None = None,
         custom_phrases: list[str] | None = None,
         session_names: list[str] | None = None,
+        memory=None,
+        tool_context: ToolContext | None = None,
     ) -> None:
         self.cfg = cfg
         self.client = client
         self.context_provider = context_provider
         self.custom_phrases = custom_phrases or []
         self.session_names = session_names or []
+        self.memory = memory
+        self.tool_context = tool_context or ToolContext()
         self.history: deque[dict[str, str]] = deque(maxlen=max(0, cfg.llm.history_turns) * 2)
+        if memory is not None:
+            try:
+                for turn in memory.history(cfg.llm.history_turns):
+                    self.history.append(turn)
+            except Exception as exc:  # noqa: BLE001
+                log.debug("historique LLM non chargé : %s", exc)
 
     # ------------------------------------------------------------------ prompts
     def persona(self, language: str) -> str:
@@ -163,7 +193,23 @@ class Brain:
         rows = [f"- {k} : {v}" for k, v in ctx.items() if v]
         return "Contexte actuel :\n" + "\n".join(rows) if rows else ""
 
+    def memory_block(self, language: str) -> str:
+        if self.memory is None:
+            return ""
+        try:
+            return self.memory.facts_block(language)
+        except Exception as exc:  # noqa: BLE001
+            log.debug("mémoire indisponible : %s", exc)
+            return ""
+
     def decide_system_prompt(self, language: str) -> str:
+        tools = ("\n\n" + tools_block()) if self.cfg.llm.tools else ""
+        step = (
+            "4. si tu as besoin d'une information (calcul, presse-papiers, fichier, mémoire, tâches) → "
+            "un appel d'outil, puis tu décideras avec son résultat\n"
+            if self.cfg.llm.tools
+            else ""
+        )
         return (
             f"{self.persona(language)}\n\n"
             "L'utilisateur vient de dire une phrase que le moteur de règles n'a pas reconnue. Décide :\n"
@@ -171,22 +217,39 @@ class Brain:
             '{"action": "<nom>", "slots": {...}, "say": "<courte confirmation optionnelle>"}\n'
             '2. si c\'est une question ou une conversation → {"reply": "<réponse parlée>"}\n'
             '3. si ce n\'est pas adressé à toi (bruit, conversation entre humains) → {"ignore": true}\n'
+            f"{step}"
             "Réponds UNIQUEMENT avec un objet JSON, sans texte autour.\n\n"
-            f"Capacités :\n{self.capabilities_block()}\n\n{self.context_block()}"
+            f"Capacités :\n{self.capabilities_block()}{tools}\n\n{self.memory_block(language)}\n\n{self.context_block()}"
         ).strip()
 
     def chat_system_prompt(self, language: str) -> str:
-        return f"{self.persona(language)}\n\n{self.context_block()}".strip()
+        return f"{self.persona(language)}\n\n{self.memory_block(language)}\n\n{self.context_block()}".strip()
 
     # ------------------------------------------------------------------ appels
     def decide(self, text: str, language: str = "fr") -> Decision:
-        result = self.client.chat(
-            [*self.history, {"role": "user", "content": text}],
-            system=self.decide_system_prompt(language),
+        messages = [*self.history, {"role": "user", "content": text}]
+        system = self.decide_system_prompt(language)
+        kwargs = dict(
+            system=system,
             max_tokens=min(self.cfg.llm.max_tokens, 300),
             temperature=min(self.cfg.llm.temperature, 0.3),
             json_mode=True,
         )
+        result = self.client.chat(messages, **kwargs)
+        tool_call = _tool_call_in(result.text) if self.cfg.llm.tools else None
+        if tool_call is not None:
+            name, args = tool_call
+            output = run_tool(name, args, self.tool_context)
+            log.info("LLM outil %s(%s) → %s", name, args, output[:80])
+            messages = [
+                *messages,
+                {"role": "assistant", "content": result.text},
+                {
+                    "role": "user",
+                    "content": f"Résultat de l'outil {name} : {output[:3000]}\nDécide maintenant (JSON).",
+                },
+            ]
+            result = self.client.chat(messages, **kwargs)
         decision = parse_decision(result.text)
         log.info(
             "LLM decide (%s, %d+%d tokens) : %s",
@@ -215,13 +278,61 @@ class Brain:
         self._remember(text, answer)
         return answer
 
+    def converse_stream(self, text: str, language: str = "fr") -> Iterator[str]:
+        """Itère sur les phrases de la réponse au fil de la génération (mémorise la réponse complète à la fin)."""
+        buffer = ""
+        spoken: list[str] = []
+        try:
+            for chunk in self.client.chat_stream(
+                [*self.history, {"role": "user", "content": text}],
+                system=self.chat_system_prompt(language),
+                max_tokens=self.cfg.llm.max_tokens,
+                temperature=self.cfg.llm.temperature,
+            ):
+                buffer += chunk
+                sentences = split_sentences(_strip_markdown(buffer), min_chars=30)
+                while len(sentences) > 1:
+                    sentence = sentences.pop(0)
+                    spoken.append(sentence)
+                    yield sentence
+                    buffer = " ".join(sentences)
+                    sentences = split_sentences(_strip_markdown(buffer), min_chars=30)
+        finally:
+            tail = _strip_markdown(buffer)
+            if tail:
+                spoken.append(tail)
+            answer = " ".join(spoken).strip()
+            if answer:
+                self._remember(text, answer)
+        if tail:
+            yield tail
+
     def _remember(self, user: str, assistant: str) -> None:
         if self.history.maxlen:
             self.history.append({"role": "user", "content": user})
             self.history.append({"role": "assistant", "content": assistant})
+        if self.memory is not None:
+            try:
+                self.memory.add_turn("user", user)
+                self.memory.add_turn("assistant", assistant)
+            except Exception as exc:  # noqa: BLE001
+                log.debug("historique LLM non enregistré : %s", exc)
 
     def forget(self) -> None:
         self.history.clear()
+        if self.memory is not None:
+            self.memory.clear_history()
+
+
+def _tool_call_in(raw: str) -> tuple[str, dict] | None:
+    match = _JSON_BLOCK.search(raw or "")
+    if not match:
+        return None
+    try:
+        data = json.loads(match.group(0))
+    except json.JSONDecodeError:
+        return None
+    return parse_tool_call(data) if isinstance(data, dict) else None
 
 
 def parse_decision(raw: str) -> Decision:

@@ -43,17 +43,21 @@ Objectif : Iris devient un citoyen du bureau Omarchy.
 - [ ] Notifications riches émises par Iris (icône, actions cliquables)
 - [ ] Widget Quickshell
 
-## Phase 3 — Agents IA + mémoire contextuelle
+## Phase 3 — Agents IA + mémoire contextuelle ✅ (v0.3)
 
 Objectif : Iris agit dans la durée et se souvient.
 
-- [ ] Pont Claude Code (`claude -p`, abonnement claude.ai, **pas d'API**) asynchrone : « je demande à Claude » puis notification et résumé vocal
-- [ ] Agents en arrière-plan (`claude`, `opencode`, `codex`, scripts) avec suivi : « surveille la compilation » → notification à la fin
-- [ ] Mémoire contextuelle SQLite : projets ouverts, dernier workspace, tâches en cours, préférences apprises ; historique LLM persistant
-- [ ] « Veux-tu reprendre ta session de codage d'hier ? » au démarrage (opt-in)
-- [ ] Transcription voix → prompt dans le terminal actif (style BridgeVoice)
-- [ ] Réponses LLM en streaming (phrase par phrase vers la voix)
-- [ ] Outils LLM avancés : lecture d'un fichier, résumé de la fenêtre active, calculs
+- [x] Tâches en arrière-plan (`[[tasks]]`) avec annonce vocale et notification à la fin ; surveillance d'un processus existant (`pgrep -f`) ; état, annulation, lecture du résultat ; historique dans le journal (`iris tasks`)
+- [x] Agents lancés à la voix en arrière-plan : Claude Code (`claude -p`, abonnement claude.ai, **pas d'API**), OpenCode (`opencode run`), Codex (`codex exec`), Gemini CLI ; dossier du projet déduit de « … dans le projet X » ; résumé parlé + notification ; `iris agents`
+- [x] Projets : « ouvre le projet X » → éditeur + terminal dans le dossier ; `[projects]` + `system.project_dirs` ; `iris projects`
+- [x] Voix → terminal : « envoie : … » / « dis au terminal … » (texte + Entrée), « mode terminal » (dictée avec Entrée)
+- [x] Mémoire persistante : faits (« retiens que… », « oublie… », « que sais-tu de moi ? »), injectés dans le prompt du LLM ; historique de conversation LLM persistant ; `iris memory`
+- [x] Instantanés de session (fenêtres par workspace, toutes les 10 min et à l'arrêt) ; « reprends ma session d'hier » ; proposition de reprise au démarrage (opt-in `assistant.resume_prompt`)
+- [x] Réponses LLM en streaming (SSE) lues phrase par phrase
+- [x] Outils du modèle : `calc`, `clipboard`, `read_file` (dossier personnel), `recall`, `tasks` (un appel par décision)
+- [x] Texte d'origine (accents, majuscules) conservé pour la dictée, les prompts d'agents, la mémoire et les recherches
+- [ ] Dialogue suivi avec un agent interactif (relire ses questions, répondre à la voix)
+- [ ] Restauration des fichiers ouverts dans l'éditeur lors d'une reprise de session
 
 ## Phase 4 — Personnalisation + apprentissage
 

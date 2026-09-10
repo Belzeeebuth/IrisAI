@@ -19,6 +19,9 @@ AudioCapture ──▶ VadSegmenter ──▶ STT ──▶ Assistant.on_utteran
 - **Routeur** (`core/router.py`) : `_h_<intent>` → `Reply(text, ok, keep_listening, control)`. Erreurs `RuntimeError` = attendues (outil absent) → réponse parlée. Journalise chaque exécution. `intent_from_decision()` convertit une proposition du LLM en intention ordinaire (nom vérifié, confirmations conservées).
 - **LLM** (`llm/client.py`, `llm/brain.py`) : client urllib pour `/chat/completions` (OpenAI-compatible) et `/messages` (Anthropic-compatible) avec presets OpenCode Go / Zen, OpenAI, OpenRouter, Ollama ; `Brain.decide()` (JSON : action / réponse / ignore) et `Brain.converse()`, prompt système = persona + capacités + contexte, historique borné.
 - **Découpage** (`nlu/split.py`) : plusieurs commandes par phrase, formes elliptiques pour les verbes d'application.
+- **Tâches** (`core/tasks.py`) : `TaskManager.run()` (Popen détaché, lecture de la sortie en thread, événement de fin), `watch()` (`pgrep -f`), `cancel()`, journal SQLite ; l'assistant draine les événements dans `tick()` et annonce dans un moment calme.
+- **Agents** (`agents/runner.py`) : presets Claude Code / OpenCode / Codex / Gemini → tâche de type `agent` dans le dossier du projet (`actions/projects.py`).
+- **Mémoire** (`core/memory.py`) : faits (clé → valeur ou texte libre), historique LLM, au-dessus du journal.
 - **Statut** (`core/status.py`) : fichier JSON `$XDG_RUNTIME_DIR/iris/state.json` (format Waybar) + signal, fichier pid pour `iris trigger`.
 - **Assistant** (`core/assistant.py`) : états `IDLE / ACTIVE / CONFIRMING / PAUSED`, fenêtres temporelles via un `clock` injectable (testable), suppression de l'écho (trames antérieures à `_ignore_before` ignorées).
 - **Actions** (`actions/`) : toute commande système passe par `system.run` / `system.launch` / `system.which`, remplacés par un faux dans les tests.
@@ -30,7 +33,7 @@ AudioCapture ──▶ VadSegmenter ──▶ STT ──▶ Assistant.on_utteran
 - **Local d'abord, cloud en opt-in** : `privacy.allow_cloud` court-circuite tout backend réseau.
 - **Dégradation gracieuse** : chaque brique a un repli (parec → pw-record → arecord ; piper → espeak → console ; wpctl → pactl ; omarchy-* → outils génériques). Un outil manquant produit une réponse, pas un crash.
 - **Imports paresseux** : numpy est la seule dépendance dure ; faster-whisper, piper, sounddevice, openwakeword, requests sont importés à l'usage.
-- **Testabilité** : 260 tests sans matériel — NLU (table de phrases), wake word, routeur (commandes émises), machine à états (horloge simulée), VAD (signal synthétique), config, journal, CLI.
+- **Testabilité** : 336 tests sans matériel — NLU (table de phrases), wake word, routeur (commandes émises), machine à états (horloge simulée), VAD (signal synthétique), config, journal, CLI.
 - **Séparation texte / voix** : `handle_text()` et `on_utterance()` partagent `process_command()` ; `iris repl` exerce exactement la logique du mode vocal.
 - **Lancement d'apps détaché** : `uwsm app --` (scope systemd propre, survit au redémarrage d'Iris) → `systemd-run --user` → `Popen` en nouvelle session.
 - **Service systemd** dans `graphical-session.target` : démarre/arrête avec Hyprland (UWSM), `Restart=on-failure`, `background.slice`.

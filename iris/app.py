@@ -8,14 +8,17 @@ from datetime import datetime
 from iris import paths
 from iris.actions import devices, hyprland
 from iris.actions.apps import AppResolver
+from iris.actions.projects import ProjectResolver
 from iris.actions.sessions import SessionManager
-from iris.agents.claude_code import ClaudeCodeAgent
+from iris.agents.runner import AgentRunner
 from iris.config import Config
 from iris.core.assistant import Assistant
 from iris.core.journal import Journal
+from iris.core.memory import Memory
 from iris.core.phrasebook import Phrasebook
 from iris.core.router import Router
 from iris.core.status import StatusWriter
+from iris.core.tasks import TaskManager
 from iris.nlu.intents import IntentParser
 from iris.tts.factory import build_tts
 
@@ -42,12 +45,18 @@ def build_wake(cfg: Config):
 
 
 def build_brain(
-    cfg: Config, journal: Journal | None, phrases_for_custom: list[str], session_names: list[str]
+    cfg: Config,
+    journal: Journal | None,
+    phrases_for_custom: list[str],
+    session_names: list[str],
+    memory=None,
+    tasks=None,
 ):
     """Cerveau LLM si activé et correctement configuré, sinon None (avec un avertissement)."""
     if not cfg.llm.enabled:
         return None
     from iris.llm import Brain, LLMError, build_client
+    from iris.llm.tools import ToolContext
 
     try:
         client = build_client(cfg.llm, cfg.privacy.allow_cloud)
@@ -80,6 +89,19 @@ def build_brain(
                 )
         return ctx
 
+    def tasks_status() -> str:
+        if tasks is None:
+            return ""
+        lines = [
+            f"{t.name} : {t.status}" + (f" — {t.summary(120)}" if t.status != "running" else "")
+            for t in tasks.all()[-8:]
+        ]
+        return "\n".join(lines)
+
+    tool_context = ToolContext(
+        memory_facts=(lambda: memory.facts_block()) if memory is not None else None,
+        tasks_status=tasks_status,
+    )
     log.info("LLM : %s (%s, api %s)", cfg.llm.provider, cfg.llm.model, client.api)
     return Brain(
         cfg,
@@ -87,6 +109,8 @@ def build_brain(
         context_provider=context,
         custom_phrases=phrases_for_custom,
         session_names=session_names,
+        memory=memory,
+        tool_context=tool_context,
     )
 
 
@@ -104,10 +128,28 @@ def build_assistant(
     apps = AppResolver(cfg.apps, cfg.system.terminal, cfg.system.browser, cfg.system.editor)
     sessions = SessionManager(cfg.sessions, journal, apps)
     custom_phrases = [p for c in cfg.commands for p in c.phrases]
-    brain = build_brain(cfg, journal, custom_phrases, sessions.names())
-    agent = ClaudeCodeAgent(cfg.agents)
-    router = Router(cfg, phrases, journal, apps=apps, agent=agent, brain=brain, sessions=sessions)
-    parser = IntentParser(cfg.commands, session_phrases={s.name: s.phrases for s in cfg.sessions})
+    memory = Memory(journal, cfg.memory.max_facts) if cfg.memory.enabled else None
+    tasks = TaskManager(journal)
+    projects = ProjectResolver(cfg.projects, cfg.system.project_dirs, apps)
+    agents = AgentRunner(cfg.agents, tasks, projects)
+    brain = build_brain(cfg, journal, custom_phrases, sessions.names(), memory=memory, tasks=tasks)
+    router = Router(
+        cfg,
+        phrases,
+        journal,
+        apps=apps,
+        brain=brain,
+        sessions=sessions,
+        tasks=tasks,
+        memory=memory,
+        agents=agents,
+        projects=projects,
+    )
+    parser = IntentParser(
+        cfg.commands,
+        session_phrases={s.name: s.phrases for s in cfg.sessions},
+        task_phrases={t.name: t.phrases for t in cfg.tasks},
+    )
     tts = build_tts(cfg, prefer_console=not speak)
     stt = None
     if with_stt:

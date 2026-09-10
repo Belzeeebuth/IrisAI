@@ -114,6 +114,12 @@ RULES: list[Rule] = [
         ],
     ),
     Rule(
+        "dictation_start_enter",
+        [
+            r"^(?:mode (?:prompt|terminal)|dictee (?:terminal|prompt)|(?:prompt|terminal) mode|terminal dictation|dictation with enter)$",
+        ],
+    ),
+    Rule(
         "dictation_start",
         [
             r"^(?:mode dictee|dictee|commence la dictee|passe en (?:mode )?dictee|active la dictee|start dictation|dictation mode|dictation)$",
@@ -122,7 +128,7 @@ RULES: list[Rule] = [
     Rule(
         "type_text",
         [
-            r"^(?:ecris|ecrit|tape|saisis|dicte|note|write|type)\s*[:]?\s+(?P<text>.+)$",
+            r"^(?:ecris|ecrit|tape|saisis|dicte|write|type)\s*[:]?\s+(?P<text>.+)$",
         ],
     ),
     # --- écrans --------------------------------------------------------------------------
@@ -223,6 +229,79 @@ RULES: list[Rule] = [
             r"(?:active|mets|passe en|enable|turn on)\s+(?:le mode )?(?:ne pas deranger|do not disturb|dnd)|^(?:mode )?ne pas deranger$|^do not disturb$",
         ],
     ),
+    # --- mémoire ------------------------------------------------------------------------
+    Rule(
+        "forget_all",
+        [
+            r"^(?:oublie tout|efface ta memoire|vide ta memoire|forget everything|clear your memory)$"
+        ],
+    ),
+    Rule("forget", [r"^(?:oublie|forget)\s+(?:que |that )?(?P<fact>.+)$"]),
+    Rule(
+        "remember",
+        [
+            r"^(?:retiens|souviens toi|rappelle toi|memorise|prends note|remember|keep in mind|note bien)\s+(?:bien )?(?:que |that )?(?P<fact>.+)$",
+        ],
+    ),
+    Rule(
+        "recall",
+        [
+            r"(?:qu'est ce que tu sais (?:de|sur) moi|que sais tu (?:de|sur) moi|de quoi te souviens tu|de quoi tu te souviens|"
+            r"ta memoire|tes souvenirs|what do you know about me|what do you remember)",
+        ],
+    ),
+    # --- projets et sessions ----------------------------------------------------------------
+    Rule(
+        "open_project",
+        [
+            r"^(?:ouvre|lance|open|launch|va dans|go to)\s+(?:moi\s+)?(?:le |the )?(?:projet|project)\s+(?P<name>.+)$",
+        ],
+    ),
+    Rule(
+        "session_resume",
+        [
+            r"^(?:reprends|reprend|restaure|resume|restore)\s+(?:ma |la |my |the )?(?:derniere |last |previous )?session"
+            r"(?:\s+(?:de|of)\s+[\w ]+?)?(?:\s+(?:d'hier|precedente|d'avant|of yesterday|from yesterday))?$",
+        ],
+    ),
+    # --- tâches et agents ---------------------------------------------------------------------
+    Rule(
+        "task_status",
+        [
+            r"^(?:ou en est|ou en sont|comment avance|comment avancent|etat de|etat des|status of|how is|how's|how are)\s+"
+            r"(?:la |le |les |mes |ma |mon |the |my )?(?P<name>.+?)\s*$",
+            r"^(?:mes taches|les taches|etat des taches|taches en cours|tasks|task status|running tasks|mes agents)$",
+        ],
+    ),
+    Rule(
+        "task_result",
+        [
+            r"^(?:lis|donne|montre|read|show)\s+(?:moi\s+)?(?:le |la |the )?(?:resultat|sortie|reponse|result|output|answer)"
+            r"(?:\s+(?:de |du |de la |of |of the )(?:la |the )?(?P<name>.+?))?$",
+            r"^(?:qu'a (?:repondu|dit|fait|trouve)|qu'est ce qu'a (?:repondu|dit|fait|trouve))\s+(?P<agent>claude|opencode|codex|gemini|l'agent)$",
+            r"^what did (?P<agent2>claude|opencode|codex|gemini|the agent) (?:say|answer|do|find)$",
+        ],
+    ),
+    Rule(
+        "task_cancel",
+        [
+            r"^(?:annule|arrete|stoppe|interromps|cancel|abort)\s+"
+            r"(?!(?:la |le |les |the )?(?:musique|lecture|music|son|volume|dictee|dictation|ecoute|listening)\b)"
+            r"(?:la |le |les |the )?(?:tache |task )?(?P<name>.+)$",
+        ],
+    ),
+    Rule(
+        "task_watch",
+        [
+            r"^(?:surveille|surveilles|watch|monitor|suis|garde un oeil sur|keep an eye on)\s+(?:la |le |les |the |my |ma |mon )?(?P<name>.+)$",
+        ],
+    ),
+    Rule(
+        "task_run",
+        [
+            r"^(?:lance|execute|run|start)\s+(?:la |the )?(?:tache|task|job)\s+(?P<name>.+)$",
+        ],
+    ),
     # --- sessions ------------------------------------------------------------------------
     Rule(
         "session_save",
@@ -286,7 +365,7 @@ RULES: list[Rule] = [
     Rule(
         "volume_mute",
         [
-            r"(?:coupe|desactive|eteins|mute)\s+(?:le |the )?(?:son|volume|audio|sound|micro)|"
+            r"(?:coupe|desactive|eteins|arrete|mute)\s+(?:le |the )?(?:son|volume|audio|sound|micro)|"
             r"^(?:mute|silence|sourdine)$|(?:mets? (?:en )?sourdine|en sourdine)",
         ],
     ),
@@ -431,6 +510,13 @@ RULES: list[Rule] = [
         ],
         confirm=True,
     ),
+    Rule(
+        "type_and_enter",
+        [
+            r"^(?:envoie|send|submit|tape et valide|ecris et valide|dis au terminal|tell the terminal|prompt)\s*[:]?\s+"
+            r"(?!(?:cette |la |this |the |active |l')?(?:fenetre|window|app|application)\b)(?!ca sur|ca vers|it to)(?P<text>.+)$",
+        ],
+    ),
     # --- parole --------------------------------------------------------------------------
     Rule("say", [r"^(?:dis|dis moi|repete|repete apres moi|say|repeat)\s+(?P<text>.+)$"]),
     # --- web -----------------------------------------------------------------------------
@@ -448,6 +534,13 @@ RULES: list[Rule] = [
             r"(?P<query>.+?)(?:\s+(?:sur|on)\s+(?:le |the )?(?:web|internet|google|net))?$",
         ],
     ),
+    Rule(
+        "ask_agent",
+        [
+            r"^(?:demande a|ask|dis a|tell)\s+(?P<agent>claude|opencode|codex|gemini|l'agent|the agent)[,:]?\s+(?:de |d'|to )?(?P<prompt>.+)$",
+            r"^(?:lance|run|start|launch)\s+(?P<agent2>un agent|an agent|l'agent|the agent|claude|opencode|codex|gemini)\s*[:,]?\s+(?:pour |to |de |d')?(?P<prompt>.+)$",
+        ],
+    ),
     # --- applications (génériques, en dernier) -------------------------------------------
     Rule(
         "close_app",
@@ -460,12 +553,6 @@ RULES: list[Rule] = [
         [
             rf"^(?:ouvre|ouvrir|lance|lancer|demarre|demarrer|execute|open|launch|start|run)\s+(?:moi\s+)?"
             rf"(?P<app_raw>{ART}{APP_WORD}(?P<app>.+?))$",
-        ],
-    ),
-    Rule(
-        "ask_agent",
-        [
-            r"^(?:demande a claude|ask claude|claude|dis a claude|tell claude|demande a l'agent|ask the agent)[,:]?\s+(?P<prompt>.+)$",
         ],
     ),
     Rule(
@@ -546,6 +633,30 @@ def parse_yes_no(text: str) -> bool | None:
 
 
 CONFIRM_INTENTS = {r.name for r in RULES if r.confirm}
+# Slots dont on veut le texte d'origine (accents, majuscules) plutôt que la forme canonique.
+FREE_TEXT_SLOTS = ("text", "fact", "prompt", "query")
+_EDGE = re.compile(r"^[\s,;:!?.…\"'«»()-]+|[\s,;:!?.…\"'«»()-]+$")
+
+
+def _recover_original(original: str, slot: str) -> str:
+    """Retrouve dans la phrase d'origine le passage qui correspond au slot canonique
+    (« bonjour a tous » → « Bonjour à tous », « ecrire un readme » → « écrire un README »)."""
+    words = original.split()
+    target = canonical(slot)
+    n = len(target.split())
+    for k in range(max(1, n - 2), min(len(words), n + 3) + 1):
+        for i in range(len(words) - k, -1, -1):
+            candidate = _EDGE.sub("", " ".join(words[i : i + k]))
+            canon = canonical(candidate)
+            if canon == target:
+                return candidate
+            if canon.endswith(" " + target) or canon.endswith(target):
+                elided = re.sub(r"^\w{1,3}'", "", candidate)
+                if canonical(elided) == target:
+                    return elided
+    return slot
+
+
 INTENT_NAMES = [r.name for r in RULES]
 _SESSION_VERB = re.compile(
     r"^(?:ouvre|lance|charge|restaure|reprends|open|launch|restore|load|resume)\s+(?:moi\s+)?"
@@ -559,12 +670,16 @@ class IntentParser:
         fuzzy_threshold: float = 0.85,
         rules: Sequence[Rule] = RULES,
         session_phrases: dict[str, Iterable[str]] | None = None,
+        task_phrases: dict[str, Iterable[str]] | None = None,
     ) -> None:
         self._rules: list[tuple[Rule, list[re.Pattern[str]]]] = [(r, r.compiled()) for r in rules]
         self._custom = [(c, [canonical(p) for p in c.phrases]) for c in custom_commands]
         self._sessions = {
             name: [canonical(p) for p in phrases]
             for name, phrases in (session_phrases or {}).items()
+        }
+        self._tasks = {
+            name: [canonical(p) for p in phrases] for name, phrases in (task_phrases or {}).items()
         }
         self._fuzzy = fuzzy_threshold
 
@@ -580,6 +695,9 @@ class IntentParser:
         session = self._match_session(canon, text)
         if session is not None:
             return session
+        task = self._match_task(canon, text)
+        if task is not None:
+            return task
 
         for rule, patterns in self._rules:
             for pattern in patterns:
@@ -587,6 +705,9 @@ class IntentParser:
                 if not m:
                     continue
                 slots = {k: v.strip() for k, v in m.groupdict().items() if v}
+                for key in FREE_TEXT_SLOTS:
+                    if key in slots:
+                        slots[key] = _recover_original(text, slots[key])
                 for key in rule.int_slots:
                     if key in slots:
                         try:
@@ -613,6 +734,14 @@ class IntentParser:
             for phrase in phrases:
                 if stripped == phrase or canon == phrase:
                     return Intent("session_open", {"name": name}, 1.0, original)
+        return None
+
+    def _match_task(self, canon: str, original: str) -> Intent | None:
+        """Phrases déclarées dans [[tasks]] → task_run (« lance la compilation »)."""
+        for name, phrases in self._tasks.items():
+            for phrase in phrases:
+                if canon == phrase or SequenceMatcher(None, canon, phrase).ratio() >= 0.93:
+                    return Intent("task_run", {"name": name}, 1.0, original)
         return None
 
     def _match_custom(self, canon: str, original: str) -> Intent | None:

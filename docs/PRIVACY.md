@@ -13,7 +13,9 @@
 |---|---|---|
 | Journal des actions (intention, paramètres, résultat, durée, horodatage) | `~/.local/state/iris/iris.db` | `privacy.journal_actions = false` ; `iris journal --clear` |
 | Texte des phrases entendues | même base, table `utterances` | **désactivé par défaut** (`privacy.store_transcripts`) |
-| Préférences apprises (phases 3-4) | même base, table `prefs` | idem |
+| Préférences, instantanés de session (fenêtres par workspace) | même base, table `prefs` | `memory.enabled = false` désactive les instantanés |
+| Faits mémorisés (« retiens que … ») et historique de conversation LLM | même base, tables `facts` et `chat` | `iris memory clear`, « oublie tout » ; `memory.enabled = false` |
+| Tâches et agents : nom, commande, statut, fin de sortie (800 caractères) | même base, table `tasks` | `iris journal --clear` n'y touche pas ; supprimer `iris.db` efface tout |
 | Log technique (niveau INFO : ce qu'Iris entend et fait) | `~/.local/state/iris/iris.log` + journald | `journalctl --user -u iris` ; rotation 2 Mo × 3 |
 
 Note : le log INFO contient le texte entendu (« Entendu [idle] : … ») pour le diagnostic. Lance le service avec `iris run` sans `-v` pour rester à ce niveau, ou réduis le niveau dans `iris/log.py` si tu veux un log muet.
@@ -22,7 +24,8 @@ Note : le log INFO contient le texte entendu (« Entendu [idle] : … ») pour l
 
 | Fonction | Condition | Ce qui est envoyé |
 |---|---|---|
-| Cerveau LLM (OpenCode Zen / Go, OpenAI, OpenRouter) | `privacy.allow_cloud = true`, `llm.enabled = true`, clé | Le texte des phrases non reconnues et des questions, la personnalité, la liste des capacités, et si `llm.context` : heure, classe + titre de la fenêtre active, workspace, batterie, trois dernières actions. Jamais l'audio. Avec `provider = "ollama"` (localhost), rien ne sort. |
+| Cerveau LLM (OpenCode Zen / Go, OpenAI, OpenRouter) | `privacy.allow_cloud = true`, `llm.enabled = true`, clé | Le texte des phrases non reconnues et des questions, la personnalité, **les faits mémorisés**, l'historique récent, la liste des capacités, et si `llm.context` : heure, classe + titre de la fenêtre active, workspace, batterie, trois dernières actions ; si le modèle demande un outil : le résultat de ce seul outil (un calcul, le presse-papiers, un fichier de ton dossier personnel, l'état des tâches). Jamais l'audio. Avec `provider = "ollama"` (localhost), rien ne sort. |
+| Agents (Claude Code, OpenCode, Codex, Gemini CLI) | `agents.enabled = true` | Le prompt dicté, transmis au CLI de l'agent qui utilise **sa propre** connexion (abonnement claude.ai, compte OpenCode…) ; ce que l'agent envoie ensuite dépend de lui. Iris ne stocke aucune clé pour eux. |
 | Voix OpenAI (`tts.backend = "openai"`) | `privacy.allow_cloud = true`, `OPENAI_API_KEY` | Le texte des réponses d'Iris (pas pour un serveur `localhost`). |
 | ElevenLabs (voix) | `privacy.allow_cloud = true`, `ELEVENLABS_API_KEY` (backend explicite ou `auto`) | Le texte des réponses d'Iris (une fois par phrase distincte grâce au cache). |
 | Cartesia (voix) | `privacy.allow_cloud = true`, `CARTESIA_API_KEY` | Le texte des réponses d'Iris. |
