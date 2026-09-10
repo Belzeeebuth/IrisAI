@@ -59,6 +59,21 @@ CREATE TABLE IF NOT EXISTS tasks (
     status TEXT NOT NULL DEFAULT 'running',
     output TEXT NOT NULL DEFAULT ''
 );
+CREATE TABLE IF NOT EXISTS automations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    intent TEXT NOT NULL,
+    slots TEXT NOT NULL DEFAULT '{}',
+    hour INTEGER NOT NULL DEFAULT 9,
+    minute INTEGER NOT NULL DEFAULT 0,
+    days TEXT NOT NULL DEFAULT '',
+    once_at REAL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created REAL NOT NULL,
+    last_run REAL,
+    source TEXT NOT NULL DEFAULT 'voice'
+);
 CREATE INDEX IF NOT EXISTS idx_actions_ts ON actions(ts);
 CREATE INDEX IF NOT EXISTS idx_actions_intent ON actions(intent);
 """
@@ -283,6 +298,65 @@ class Journal:
                 "SELECT * FROM tasks ORDER BY started DESC LIMIT ?", (int(limit),)
             ).fetchall()
         return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------ habitudes
+    def actions_since(self, since_ts: float) -> list[tuple[float, str, str, bool]]:
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT ts, intent, slots, ok FROM actions WHERE ts >= ? ORDER BY ts",
+                (float(since_ts),),
+            ).fetchall()
+        return [(r["ts"], r["intent"], r["slots"], bool(r["ok"])) for r in rows]
+
+    # ------------------------------------------------------------------ automatisations
+    def add_automation(
+        self,
+        name: str,
+        kind: str,
+        intent: str,
+        slots: str,
+        hour: int,
+        minute: int,
+        days: str,
+        once_at: float | None,
+        source: str = "voice",
+    ) -> int:
+        with self._lock:
+            cur = self._db.execute(
+                "INSERT INTO automations (name, kind, intent, slots, hour, minute, days, once_at, created, source) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?)",
+                (
+                    name,
+                    kind,
+                    intent,
+                    slots,
+                    int(hour),
+                    int(minute),
+                    days,
+                    once_at,
+                    time.time(),
+                    source,
+                ),
+            )
+            self._db.commit()
+            return int(cur.lastrowid)
+
+    def list_automations(self) -> list[dict[str, Any]]:
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT * FROM automations ORDER BY hour, minute, id"
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def delete_automation(self, auto_id: int) -> None:
+        with self._lock:
+            self._db.execute("DELETE FROM automations WHERE id = ?", (int(auto_id),))
+            self._db.commit()
+
+    def mark_automation_run(self, auto_id: int, ts: float) -> None:
+        with self._lock:
+            self._db.execute("UPDATE automations SET last_run = ? WHERE id = ?", (ts, int(auto_id)))
+            self._db.commit()
 
     def next_task_id(self) -> int:
         with self._lock:

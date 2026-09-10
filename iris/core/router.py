@@ -9,6 +9,7 @@ par les mêmes confirmations et gestionnaires.
 from __future__ import annotations
 
 import logging
+import re
 import subprocess
 import time
 from dataclasses import dataclass, field
@@ -33,8 +34,11 @@ from iris.actions.apps import AppResolver
 from iris.actions.projects import ProjectResolver
 from iris.actions.sessions import SessionManager
 from iris.config import Config
+from iris.core.habits import describe as describe_action
 from iris.core.journal import Journal
 from iris.core.phrasebook import Phrasebook
+from iris.core.prefs import TONE_WORDS, Prefs
+from iris.core.scheduler import Schedule, parse_schedule
 from iris.core.tasks import Task, TaskManager, human_duration
 from iris.nlu.intents import CONFIRM_INTENTS, Intent
 from iris.nlu.normalize import canonical
@@ -69,6 +73,11 @@ class Router:
         memory=None,
         agents=None,
         projects: ProjectResolver | None = None,
+        prefs=None,
+        habits=None,
+        scheduler=None,
+        parser=None,
+        tts=None,
     ) -> None:
         self.cfg = cfg
         self.p = phrases
@@ -86,6 +95,11 @@ class Router:
             cfg.projects, cfg.system.project_dirs, self.apps
         )
         self.background = {canonical(t.name): t for t in cfg.tasks}
+        self.prefs = prefs
+        self.habits = habits
+        self.scheduler = scheduler
+        self.parser = parser
+        self.tts = tts
 
     @property
     def lang(self) -> str:
@@ -680,7 +694,11 @@ class Router:
     # ------------------------------------------------------------------ commandes perso
     def _h_custom(self, intent: Intent) -> Reply:
         command = intent.command
-        assert command is not None
+        if command is None:
+            wanted = canonical(str(intent.slot("command", "")))
+            command = next((c for c in self.cfg.commands if canonical(c.name) == wanted), None)
+        if command is None:
+            return Reply(self.p.get("not_understood"), ok=False)
         if command.wait:
             proc = subprocess.run(
                 command.exec, shell=True, capture_output=True, text=True, timeout=120
@@ -725,3 +743,344 @@ class Router:
         task = self.agents.run(name, prompt)
         label = task.meta.get("label", name or "l'agent")
         return Reply(self.p.get("agent_started", agent=label), data={"task_id": task.id})
+
+    # ================================================================== phase 4 : automatisations
+    def _schedule_action(self, action_text: str) -> Intent | None:
+        if self.parser is None:
+            return None
+        return self.parser.parse(action_text)
+
+    def _scheduler(self):
+        if self.scheduler is None or not self.cfg.automations.enabled:
+            raise RuntimeError(self.p.get("automations_disabled"))
+        return self.scheduler
+
+    def _add_automation(self, schedule: Schedule, intent: Intent, source: str = "voice") -> Reply:
+        if intent.requires_confirmation:
+            return Reply(self.p.get("automation_refused_confirm"), ok=False)
+        if intent.name.startswith(("automation_", "reminder_")) or intent.name in (
+            "ask_agent",
+            "ask_llm",
+            "stop",
+        ):
+            return Reply(self.p.get("automation_no_action"), ok=False)
+        slots = {k: v for k, v in intent.slots.items() if k != "app_raw"}
+        if intent.name == "custom" and intent.command is not None:
+            slots = {"command": intent.command.name}
+        action = describe_action(intent.name, slots, self.lang)
+        auto = self._scheduler().add(action, intent.name, slots, schedule, source)
+        return Reply(
+            self.p.get("automation_created", desc=auto.describe(self.lang, action)),
+            data={"automation_id": auto.id},
+        )
+
+    def _h_automation_create(self, intent: Intent) -> Reply:
+        self._last_text = intent.text
+        parsed = parse_schedule(intent.text)
+        if parsed is None:
+            return Reply(self.p.get("automation_no_action"), ok=False)
+        schedule, action_text = parsed
+        if re.match(r"^(?:rappelle moi|remind me)\b", action_text):
+            return self._create_reminder(schedule, action_text)
+        action = self._schedule_action(action_text)
+        if action is None:
+            return Reply(self.p.get("automation_no_action"), ok=False)
+        return self._add_automation(schedule, action)
+
+    def _create_reminder(self, schedule: Schedule, action_text: str) -> Reply:
+        what = re.sub(
+            r"^(?:rappelle moi|remind me)\s*(?:de |d'|que |to |that |about )?", "", action_text
+        ).strip(" ,.")
+        what = self._original_tail(what)
+        if not what:
+            return Reply(self.p.get("reminder_needs_text"), ok=False)
+        auto = self._scheduler().add(what, "reminder_fire", {"what": what}, schedule)
+        return Reply(
+            self.p.get("reminder_created", when=schedule.describe(self.lang), what=what),
+            data={"automation_id": auto.id},
+        )
+
+    def _original_tail(self, canonical_text: str) -> str:
+        """Retrouve la forme d'origine (accents) du texte du rappel dans la phrase entendue."""
+        from iris.nlu.intents import _recover_original
+
+        last = getattr(self, "_last_text", "")
+        return _recover_original(last, canonical_text) if last else canonical_text
+
+    def _h_reminder_create(self, intent: Intent) -> Reply:
+        self._last_text = intent.text
+        parsed = parse_schedule(intent.text)
+        if parsed is None:
+            return Reply(self.p.get("reminder_needs_time"), ok=False)
+        schedule, action_text = parsed
+        return self._create_reminder(schedule, action_text)
+
+    def _h_reminder_fire(self, intent: Intent) -> Reply:
+        what = str(intent.slot("what", ""))
+        return Reply(
+            self.p.get("reminder_fire", what=what),
+            keep_listening=False,
+            data={"notify": True, "urgent": True},
+        )
+
+    def _h_automation_add(self, intent: Intent) -> Reply:
+        """Création depuis une suggestion de routine acceptée (slots : intent, slots, hour, minute, days)."""
+        days = tuple(int(d) for d in (intent.slot("days") or []))
+        schedule = Schedule(
+            "weekly" if days else "daily",
+            int(intent.slot("hour", 9)),
+            int(intent.slot("minute", 0)),
+            days,
+        )
+        target = Intent(
+            str(intent.slot("intent")), dict(intent.slot("slots") or {}), text="routine"
+        )
+        return self._add_automation(schedule, target, source="habit")
+
+    def _automation_label(self, auto) -> str:
+        if auto.intent == "reminder_fire":
+            return auto.describe(self.lang, auto.name)
+        return auto.describe(self.lang, describe_action(auto.intent, auto.slots, self.lang))
+
+    def _h_automation_list(self, intent: Intent) -> Reply:
+        items = self._scheduler().list()
+        if not items:
+            return Reply(self.p.get("automation_none"))
+        return Reply(
+            self.p.get("automation_list_intro")
+            + "; ".join(self._automation_label(a) for a in items[:8])
+            + "."
+        )
+
+    def _h_automation_delete(self, intent: Intent) -> Reply:
+        name = intent.slot("name")
+        scheduler = self._scheduler()
+        items = scheduler.list()
+        if not items:
+            return Reply(self.p.get("automation_none"), ok=False)
+        auto = scheduler.find(str(name)) if name else (items[-1] if len(items) == 1 else None)
+        if auto is None:
+            return Reply(self.p.get("automation_not_found"), ok=False)
+        scheduler.delete(str(auto.id))
+        return Reply(self.p.get("automation_deleted", desc=self._automation_label(auto)))
+
+    def run_automation(self, auto) -> Reply:
+        """Exécute une automatisation due (appelé par l'assistant)."""
+        intent = Intent(auto.intent, dict(auto.slots), text=f"automation:{auto.name}")
+        if intent.name in CONFIRM_INTENTS:
+            return Reply(self.p.get("automation_refused_confirm"), ok=False)
+        return self.execute(intent)
+
+    # ================================================================== phase 4 : alias, habitudes, suggestions
+    def _h_alias_learn(self, intent: Intent) -> Reply:
+        phrase = str(intent.slot("phrase", "")).strip(" ,")
+        target = str(intent.slot("target", "")).strip(" ,.")
+        if not phrase or not target:
+            return Reply(self.p.get("not_understood"), ok=False)
+        stored = self._alias_target(target)
+        self.apps.user_aliases[canonical(phrase)] = stored
+        if self.prefs is not None:
+            self.prefs.learn_alias(phrase, stored)
+        return Reply(self.p.get("alias_learned", phrase=phrase, target=target))
+
+    def _alias_target(self, target: str) -> str:
+        """« ouvre le navigateur » → la commande réellement lancée, pour que l'alias survive tel quel."""
+        try:
+            app = self.apps.resolve(target)
+        except Exception:  # noqa: BLE001
+            app = None
+        if app is None:
+            return target
+        if app.webapp:
+            return f"webapp:{app.webapp}"
+        if app.argv:
+            import shlex
+
+            return shlex.join(app.argv)
+        return target
+
+    def _h_alias_list(self, intent: Intent) -> Reply:
+        aliases = self.prefs.aliases() if self.prefs is not None else {}
+        if not aliases:
+            return Reply(self.p.get("alias_none"))
+        return Reply(
+            self.p.get("alias_list_intro")
+            + "; ".join(f"{k} → {v}" for k, v in list(aliases.items())[:10])
+            + "."
+        )
+
+    def _h_suggestions_off(self, intent: Intent) -> Reply:
+        self.cfg.habits.enabled = False
+        if self.prefs is not None:
+            self.prefs.set("habits.suggestions", False)
+        return Reply(self.p.get("suggestions_off"))
+
+    def _h_suggestions_on(self, intent: Intent) -> Reply:
+        self.cfg.habits.enabled = True
+        if self.prefs is not None:
+            self.prefs.set("habits.suggestions", True)
+        return Reply(self.p.get("suggestions_on"))
+
+    def _h_habits_show(self, intent: Intent) -> Reply:
+        if self.habits is None:
+            return Reply(self.p.get("habits_none"))
+        from iris.core.habits import key_to_intent
+
+        parts = []
+        for r in self.habits.routines()[:3]:
+            t = f"{r.hour} h {r.minute:02d}" if r.minute else f"{r.hour} h"
+            parts.append(
+                self.p.get(
+                    "habit_routine",
+                    action=describe_action(r.intent, r.slots, self.lang),
+                    time=t,
+                    count=r.count,
+                )
+            )
+        for key, fu in list(self.habits.follow_ups().items())[:3]:
+            first_intent, first_slots = key_to_intent(key)
+            parts.append(
+                self.p.get(
+                    "habit_follow_up",
+                    first=describe_action(first_intent, first_slots, self.lang),
+                    second=describe_action(fu.intent, fu.slots, self.lang),
+                )
+            )
+        if not parts:
+            return Reply(self.p.get("habits_none"))
+        return Reply(self.p.get("habits_intro") + "; ".join(parts) + ".")
+
+    # ================================================================== phase 4 : voix et style
+    def _current_speed(self) -> float:
+        speed = self.prefs.get("voice.speed", 1.0) if self.prefs is not None else 1.0
+        return float(speed) if isinstance(speed, int | float) else 1.0
+
+    def _h_voice_speed(self, intent: Intent) -> Reply:
+        direction = str(intent.slot("dir", "")).lower()
+        if not direction:
+            speed, key = 1.0, "voice_normal"
+        elif direction in ("plus vite", "plus rapidement", "faster", "quicker"):
+            speed, key = round(min(1.6, self._current_speed() * 1.12), 2), "voice_faster"
+        else:
+            speed, key = round(max(0.6, self._current_speed() / 1.12), 2), "voice_slower"
+        Prefs.set_speed_on(self.cfg, speed)
+        if self.prefs is not None:
+            self.prefs.set("voice.speed", speed)
+        return Reply(self.p.get(key), data={"speed": speed})
+
+    OPENAI_VOICES = (
+        "alloy",
+        "ash",
+        "ballad",
+        "coral",
+        "echo",
+        "fable",
+        "nova",
+        "onyx",
+        "sage",
+        "shimmer",
+        "verse",
+        "marin",
+        "cedar",
+    )
+
+    def _h_voice_change(self, intent: Intent) -> Reply:
+        wanted = str(intent.slot("voice") or intent.slot("voice2") or "").strip()
+        backend = getattr(self.tts, "name", "")
+        chosen = ""
+        if backend == "elevenlabs" and hasattr(self.tts, "voices"):
+            try:
+                voices = self.tts.voices()
+            except Exception as exc:  # noqa: BLE001
+                return Reply(self.p.get("error", reason=str(exc)), ok=False)
+            names = [v.name for v in voices]
+            if wanted:
+                try:
+                    self.tts.resolve_voice(wanted)
+                except Exception:  # noqa: BLE001
+                    return Reply(self.p.get("voice_unknown"), ok=False)
+                chosen = next((v.name for v in voices if v.name.lower() == wanted.lower()), wanted)
+            elif names:
+                current = self.cfg.tts.elevenlabs_voice
+                idx = next((i for i, n in enumerate(names) if n.lower() == current.lower()), -1)
+                chosen = names[(idx + 1) % len(names)]
+            if not chosen:
+                return Reply(self.p.get("voice_unknown"), ok=False)
+            self.cfg.tts.elevenlabs_voice = chosen
+            self.tts._voice_id = None
+        elif backend in ("openai", "kokoro"):
+            if backend == "openai":
+                names = list(self.OPENAI_VOICES)
+                current = self.cfg.tts.openai_voice
+            else:
+                names = list(self.tts.voices()) if hasattr(self.tts, "voices") else []
+                current = self.tts.voice_for(self.lang) if hasattr(self.tts, "voice_for") else ""
+            if wanted:
+                match = next((n for n in names if n.lower() == wanted.lower()), None)
+                if match is None:
+                    return Reply(self.p.get("voice_unknown"), ok=False)
+                chosen = match
+            elif names:
+                idx = names.index(current) if current in names else -1
+                chosen = names[(idx + 1) % len(names)]
+            if not chosen:
+                return Reply(self.p.get("voice_unknown"), ok=False)
+            Prefs.set_voice_on(self.cfg, backend, chosen)
+        elif wanted and backend:
+            Prefs.set_voice_on(self.cfg, backend, wanted)
+            chosen = wanted
+        else:
+            return Reply(self.p.get("voice_no_change"), ok=False)
+        if self.prefs is not None:
+            voices_pref = self.prefs.get("voice.name") or {}
+            voices_pref[backend] = chosen
+            self.prefs.set("voice.name", voices_pref)
+        return Reply(self.p.get("voice_changed", voice=chosen), data={"voice": chosen})
+
+    def _h_style_tone(self, intent: Intent) -> Reply:
+        word = canonical(str(intent.slot("tone", "")))
+        tone = TONE_WORDS.get(word)
+        if tone is None:
+            return Reply(self.p.get("not_understood"), ok=False)
+        self.p.tone = tone
+        self.cfg.assistant.tone = tone
+        if self.tts is not None and hasattr(self.tts, "tone"):
+            self.tts.tone = tone
+        if self.prefs is not None:
+            self.prefs.set("style.tone", tone)
+        return Reply(self.p.get("style_tone_set", tone=self.p.get(f"tone_{tone}")))
+
+    def _h_style_verbosity(self, intent: Intent) -> Reply:
+        level = (
+            "concise" if intent.slot("concise") else "chatty" if intent.slot("chatty") else "normal"
+        )
+        self.p.verbosity = level
+        self.cfg.assistant.verbosity = level
+        if self.prefs is not None:
+            self.prefs.set("style.verbosity", level)
+        return Reply(self.p.get("style_verbosity_set", label=self.p.get(f"verbosity_{level}")))
+
+    def _h_language_switch(self, intent: Intent) -> Reply:
+        word = canonical(str(intent.slot("lang", "")))
+        lang = "en" if word in ("anglais", "english") else "fr"
+        self.p.lang = lang
+        self.cfg.assistant.language = lang
+        self.cfg.stt.language = lang
+        if self.tts is not None and hasattr(self.tts, "language"):
+            self.tts.language = lang
+        if self.prefs is not None:
+            self.prefs.set("style.language", lang)
+        return Reply(self.p.get("language_set"), control="language")
+
+    def _h_wake_add(self, intent: Intent) -> Reply:
+        name = str(intent.slot("name", "")).strip(" .,")
+        if not name:
+            return Reply(self.p.get("not_understood"), ok=False)
+        phrases = [name.lower(), f"hey {name.lower()}"]
+        for phrase in phrases:
+            if phrase not in self.cfg.wake.phrases:
+                self.cfg.wake.phrases.append(phrase)
+        if self.prefs is not None:
+            extra = [p for p in (self.prefs.get("wake.extra_phrases") or []) if p]
+            self.prefs.set("wake.extra_phrases", sorted(set(extra) | set(phrases)))
+        return Reply(self.p.get("wake_added", name=name), control="wake_reload")

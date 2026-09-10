@@ -69,6 +69,20 @@ Plusieurs commandes dans une phrase : « ouvre le terminal **et** va sur le work
 | `dictation_start_enter` | mode terminal · mode prompt | terminal mode |
 | `remember` / `forget` / `forget_all` / `recall` | retiens que **mon éditeur est Zed** · souviens-toi que … / oublie mon éditeur / oublie tout / qu'est-ce que tu sais de moi ? | remember that … / forget … / forget everything / what do you know about me? |
 | `session_resume` | reprends ma session d'hier · reprends ma dernière session | resume my last session |
+| `automation_create` | **chaque matin à 9 h** lance spotify · en semaine à 8 h 30 lance mon workspace de dev · tous les vendredis à 17 h mets le thème tokyo night · chaque soir à 22 h active ne pas déranger (*période + heure + n'importe quelle commande sans confirmation*, voir [AUTOMATIONS.md](AUTOMATIONS.md)) | every weekday at 8:30 open the browser · every day at 9 open spotify |
+| `reminder_create` | rappelle-moi de **sortir les poubelles** à 20 h · dans 25 minutes rappelle-moi la réunion · demain à 9 h rappelle-moi d'appeler Alice · rappelle-moi dans 2 heures de boire de l'eau | remind me to call Bob at 3 pm · in 20 minutes remind me … · remind me tomorrow at 9 to … |
+| `automation_list` | quelles sont mes automatisations · mes rappels · liste mes programmations | what are my automations · list my reminders |
+| `automation_delete` | supprime l'automatisation **de 9 h** · supprime le rappel des poubelles · annule la routine spotify (*nom, heure ou numéro*) | delete the automation at 9 · remove the reminder … |
+| `alias_learn` | quand je dis **mes mails**, ouvre **thunderbird** · quand je dis mon site, c'est le navigateur · … ça veut dire … | when I say my mails, open thunderbird |
+| `alias_list` | quels sont mes alias · mes alias | what are my aliases |
+| `habits_show` | quelles sont mes habitudes · mes habitudes | what are my habits |
+| `suggestions_off` / `suggestions_on` | arrête de me proposer des suggestions · plus de suggestions / propose-moi à nouveau des suggestions · reprends les suggestions | stop suggesting · no more suggestions / suggest again |
+| `style_tone` | sois plus **directe** · sois cash · sois chaleureuse · sois motivante · sois taquine · sois drôle · sois professionnelle · sois sérieuse · sois zen · sois calme | be direct · be friendly · be energetic · be playful · be formal · be calm |
+| `style_verbosity` | sois plus concise · réponses plus courtes · moins de blabla / sois plus bavarde · parle plus · développe / réponses normales | be brief · shorter answers / talk more · be chatty / normal answers |
+| `language_switch` | parle en anglais · réponds en français | speak french · answer in english |
+| `voice_speed` | parle plus vite · parle plus lentement · vitesse normale · parle normalement | speak faster · slower · normal speed |
+| `voice_change` | change de voix · prends une autre voix · utilise la voix de **Léa** · mets la voix Sarah | change your voice · next voice · use the Nova voice |
+| `wake_add` | appelle-toi **Nova** · réponds aussi à Jarvis · tu t'appelles Nova | call yourself Nova · also answer to Jarvis |
 | `custom` | vos phrases (`[[commands]]`), correspondance floue ≥ 85 % | idem |
 
 ## Réponses d'Iris
@@ -82,4 +96,4 @@ Selon `assistant.verbosity` et `assistant.tone` :
 | Application lancée | ghostty. | ghostty est lancé. | C'est parti, ghostty est lancé. Autre chose ? |
 | Workspace | Workspace 3. | Workspace 3. | Te voilà sur le workspace 3. Autre chose ? |
 
-Ton `direct` : « Oui. », « De rien. » ; ton `coach` : « Je suis là. On fait quoi ? », « Prêt à attaquer la journée ? ».
+Ton `direct` : « Oui. », « De rien. » ; ton `coach` : « Je suis là. On fait quoi ? », « Prêt à attaquer la journée ? » ; ton `playful` : « Oui, mon capitaine ? », « Je suis toute ouïe. » ; ton `pro` : « Je vous écoute. » ; ton `zen` : « Oui… ». Le ton et la verbosité se changent à la voix (« sois plus directe », « sois plus concise ») et sont mémorisés ; `[phrases]` dans la config remplace n'importe quelle réplique. Détails : [PERSONALIZATION.md](PERSONALIZATION.md).

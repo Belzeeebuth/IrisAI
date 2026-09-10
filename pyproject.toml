@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "iris-assistant"
-version = "0.3.0"
+version = "0.4.0"
 description = "Iris — assistant vocal natif pour Omarchy OS (Hyprland)"
 readme = "README.md"
 license = { text = "MIT" }

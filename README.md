@@ -6,7 +6,7 @@
 
 *« Hey Iris, ouvre mon workspace de dev. »*
 
-[![Phase](https://img.shields.io/badge/phase-3%20%C2%B7%20agents%20%26%20m%C3%A9moire-8b5cf6)](#roadmap)
+[![Phase](https://img.shields.io/badge/phase-4%20%C2%B7%20personnalisation%20%26%20apprentissage-8b5cf6)](#roadmap)
 [![Python](https://img.shields.io/badge/python-3.11%2B-3776ab)](pyproject.toml)
 [![Licence](https://img.shields.io/badge/licence-MIT-green)](LICENSE)
 [![Local](https://img.shields.io/badge/donn%C3%A9es-locales%20par%20d%C3%A9faut-0ea5e9)](docs/PRIVACY.md)
@@ -15,9 +15,9 @@
 
 </div>
 
-Iris est un assistant vocal conçu pour [Omarchy](https://omarchy.org) (Arch Linux + Hyprland). Elle se lance avec ta session, écoute en arrière-plan le mot d'activation **« Hey Iris »**, comprend ce que tu dis en français ou en anglais, agit sur le système (applications, workspaces et écrans Hyprland, volume, luminosité, thèmes Omarchy, musique, Bluetooth, Wi-Fi, notifications, dictée…) et te répond avec une **vraie voix IA** (ElevenLabs par défaut, OpenAI ou Cartesia au choix, Kokoro en local si tu veux rester hors-ligne). Quand une phrase sort de ses règles, un **cerveau LLM** (OpenCode Zen ou OpenCode Go, ou n'importe quel endpoint OpenAI-compatible) décide de l'action à faire ou répond à ta question. Par défaut tout tourne **en local** ; le cloud est un choix explicite.
+Iris est un assistant vocal conçu pour [Omarchy](https://omarchy.org) (Arch Linux + Hyprland). Elle se lance avec ta session, écoute en arrière-plan le mot d'activation **« Hey Iris »**, comprend ce que tu dis en français ou en anglais, agit sur le système (applications, workspaces et écrans Hyprland, volume, luminosité, thèmes Omarchy, musique, Bluetooth, Wi-Fi, notifications, dictée…) et te répond avec une **vraie voix IA** (ElevenLabs par défaut, OpenAI ou Cartesia au choix, Kokoro en local si tu veux rester hors-ligne). Quand une phrase sort de ses règles, un **cerveau LLM** (OpenCode Zen ou OpenCode Go, ou n'importe quel endpoint OpenAI-compatible) décide de l'action à faire ou répond à ta question. Elle **s'adapte à toi** : « sois plus directe », « parle plus vite », « appelle-toi Nova », « quand je dis mes mails, ouvre Thunderbird » — tout est retenu ; elle programme ce que tu lui demandes (« chaque matin à 9 h, lance mon workspace de dev », « rappelle-moi de sortir les poubelles à 20 h ») et te propose, à partir de tes habitudes, des raccourcis qu'elle n'active jamais sans ton accord. Par défaut tout tourne **en local** ; le cloud est un choix explicite.
 
-> **État du projet — Phase 3 (agents, tâches, mémoire) livrée.** Le cœur est couvert par 336 tests sans matériel. Les clients ElevenLabs, Cartesia, OpenAI et OpenCode sont testés contre des réponses simulées (aucune clé disponible pendant le développement) : leurs paramètres viennent des SDK officiels de septembre 2026. Premiers retours de terrain intégrés : la capture micro et le VAD fonctionnent sur Omarchy, et la transcription bascule seule sur CPU quand CUDA manque. Voir [Limitations connues](#limitations-connues).
+> **État du projet — Phase 4 (personnalisation, habitudes, automatisations) livrée.** Le cœur est couvert par 370 tests sans matériel. Les clients ElevenLabs, Cartesia, OpenAI et OpenCode sont testés contre des réponses simulées (aucune clé disponible pendant le développement) : leurs paramètres viennent des SDK officiels de septembre 2026. Premiers retours de terrain intégrés : la capture micro et le VAD fonctionnent sur Omarchy, et la transcription bascule seule sur CPU quand CUDA manque. Voir [Limitations connues](#limitations-connues).
 
 ---
 
@@ -30,6 +30,7 @@ Iris est un assistant vocal conçu pour [Omarchy](https://omarchy.org) (Arch Lin
 - [Installation sur Omarchy](#installation-sur-omarchy)
 - [Utilisation](#utilisation)
 - [Configuration](#configuration)
+- [Personnalisation, habitudes, automatisations](#personnalisation-habitudes-automatisations)
 - [Lancement automatique](#lancement-automatique)
 - [Vie privée et mode local](#vie-privée-et-mode-local)
 - [Architecture du code](#architecture-du-code)
@@ -71,6 +72,11 @@ Toutes les phrases ci-dessous fonctionnent en français et en anglais, avec ou s
 | **Projets** | « ouvre le projet cnvs-clone » | Éditeur + terminal dans le dossier (`[projects]` ou recherche dans `~/projets`, `~/code`, `~/dev`…). |
 | **Voix → terminal** | « envoie : lance les tests » · « dis au terminal npm test » · « mode terminal » … « fin de dictée » | Tape puis valide dans la fenêtre active : parle à un agent qui tourne dans ton terminal (style BridgeVoice). |
 | **Mémoire** | « retiens que mon éditeur est Zed » · « qu'est-ce que tu sais de moi ? » · « oublie mon éditeur » · « reprends ma session d'hier » | Faits persistants injectés dans le prompt du LLM, historique de conversation conservé, instantanés des fenêtres ouvertes et proposition de reprise au démarrage (opt-in). |
+| **Automatisations** | « chaque matin à 9 h, lance Spotify » · « en semaine à 8 h 30 lance mon workspace de dev » · « tous les vendredis à 17 h mets le thème tokyo night » · « quelles sont mes automatisations » · « supprime l'automatisation de 9 h » | Planificateur intégré (quotidien, jours de la semaine, week-end), n'importe quelle commande **sans confirmation** (les actions critiques sont refusées), annonce « Comme prévu : … » à l'exécution. `iris automations`. |
+| **Rappels** | « rappelle-moi de sortir les poubelles à 20 h » · « dans 25 minutes rappelle-moi la réunion » · « demain à 9 h rappelle-moi d'appeler Alice » | Voix + notification critique à l'heure dite ; rattrapé si Iris était éteinte. |
+| **Style à la voix** | « sois plus directe » · « sois taquine » · « sois pro » · « sois zen » · « sois plus concise » · « parle en anglais » | Six tons (`warm`, `direct`, `coach`, `playful`, `pro`, `zen`), trois verbosités, deux langues ; **mémorisé** et réappliqué au démarrage par-dessus la config (`iris prefs`). Un profil de personnalité libre nourrit le LLM et la voix OpenAI ; `[phrases]` remplace n'importe quelle réplique. |
+| **Voix à la voix** | « parle plus vite » · « parle plus lentement » · « vitesse normale » · « change de voix » · « utilise la voix de Léa » | Débit et voix par moteur (ElevenLabs par nom, OpenAI, Kokoro), mémorisés. |
+| **Apprentissage** | « appelle-toi Nova » · « quand je dis mes mails, ouvre Thunderbird » · « quels sont mes alias » · « quelles sont mes habitudes » · « arrête de me proposer des suggestions » | Noms d'activation et alias appris sans éditer la config. Habitudes déduites du journal (routines horaires, enchaînements) → suggestions avec accord explicite : « Tu fais souvent ouvrir spotify vers 9 h, je m'en occupe chaque jour à 9 h ? », « Veux-tu aussi activer ne pas déranger ? ». Un « non » est définitif. Heures calmes sans suggestion. |
 
 Après chaque commande, une courte fenêtre (5 s) permet d'enchaîner sans répéter « Hey Iris ». Une phrase non reconnue dans cette fenêtre est ignorée silencieusement (conversation ambiante) ; après un « Hey Iris » explicite, Iris te dit qu'elle n'a pas compris.
 
@@ -78,11 +84,10 @@ Après chaque commande, une courte fenêtre (5 s) permet d'enchaîner sans rép�
 
 | Pas encore | Prévu en |
 |---|---|
-| Proposer des automatisations d'elle-même (« chaque matin à 9h… ») à partir des habitudes | Phase 4 (apprentissage) |
-| Un profil de personnalité libre s'applique aux réponses du LLM, pas encore aux réponses « règles » ni à la voix | Phase 4 |
-| Suivre une conversation avec un agent interactif (relire ses questions, y répondre à la voix) : aujourd'hui l'agent tourne en mode non interactif et Iris lit sa réponse finale | Phase 4 |
-| Reprendre une session en restaurant aussi les fichiers ouverts dans l'éditeur (seules les applications et leurs workspaces sont rouverts) | Phase 4 |
-| Widget Quickshell (le module Waybar existe) | Phase 4 |
+| Planning avancé (« toutes les 2 heures », « le 1er du mois ») et automatisation de plusieurs actions d'un coup (déclare une commande `[[commands]]` qui les enchaîne) | Phase 5 |
+| Profils par contexte (« mode travail » = apps, ton, verbosité en un mot) | Phase 5 |
+| Suivre une conversation avec un agent interactif (relire ses questions, y répondre à la voix) : aujourd'hui l'agent tourne en mode non interactif et Iris lit sa réponse finale | Phase 5 |
+| Reprendre une session en restaurant aussi les fichiers ouverts dans l'éditeur (seules les applications et leurs workspaces sont rouverts) | Phase 5 |
 | Interrompre Iris pendant qu'elle parle (*barge-in*) | Phase 5 |
 | Détection du mot d'activation sur l'audio brut sans modèle à entraîner | Phase 5 (modèle « hey iris » openWakeWord fourni) |
 
@@ -119,6 +124,16 @@ iris  : Je demande à Claude. Je te préviens quand c'est prêt.
 iris  : compilation terminé en 1 min 40. Claude a terminé : j'ai corrigé les deux tests qui échouaient dans audio_test.rs…
 toi   : Iris, retiens que mon éditeur est Zed
 iris  : C'est noté.
+toi   : Iris, chaque matin à 9 h lance mon workspace de dev       ← automatisation
+iris  : Programmé : chaque jour à 9 h : lancer workspace-dev.
+toi   : Iris, rappelle-moi de sortir les poubelles à 20 h
+iris  : Je te le rappellerai aujourd'hui à 20 h 00 : sortir les poubelles.
+toi   : Iris, sois plus directe et parle plus vite               ← mémorisé pour les prochains démarrages
+iris  : D'accord, je serai plus directe. Je parle plus vite.
+      … (un matin, Iris en veille, après trois jours à lancer Spotify vers 9 h)
+iris  : Tu fais souvent ouvrir spotify vers 9 h. Veux-tu que je m'en occupe chaque jour à 9 h ?
+toi   : oui
+iris  : Programmé : chaque jour à 9 h : ouvrir spotify.
 ```
 
 Le même dialogue fonctionne au clavier avec `iris repl` (pratique pour tester sans micro).
@@ -145,11 +160,13 @@ Le même dialogue fonctionne au clavier avec `iris repl` (pratique pour tester s
      │                                          │
      ▼                                          ▼
    Journal SQLite (traçabilité,            Réponse ──▶ voix IA (ElevenLabs / OpenAI / Cartesia) ──▶ pw-play
-   mémoire, tâches)                              └──▶ état Waybar ($XDG_RUNTIME_DIR/iris/state.json)
-   Tâches & agents en arrière-plan ──(fin)──▶ annonce vocale + notification
+   mémoire, tâches, prefs, automations)          └──▶ état Waybar / Quickshell ($XDG_RUNTIME_DIR/iris/state.json)
+     │  Tâches & agents en arrière-plan ──(fin)──▶ annonce vocale + notification
+     ├─▶ Habitudes (routines, enchaînements) ──▶ suggestion « Veux-tu … ? » ──(oui)──▶ action / automatisation
+     └─▶ Planificateur ── échéances (toutes les 30 s) ──▶ « Comme prévu : … » / « Rappel : … »
 ```
 
-Machine à états : `IDLE` → (« Hey Iris ») → `ACTIVE` → (commande) → exécution → `ACTIVE` (fenêtre d'enchaînement) ou `IDLE`. Les intentions critiques passent par `CONFIRMING` (oui / non / délai de 12 s), y compris quand c'est le LLM qui les propose. « Mets-toi en pause » bascule en `PAUSED`, « mode dictée » en `DICTATING`. Pendant qu'Iris parle, le micro est ignoré pour qu'elle ne s'entende pas elle-même. La voix est jouée phrase par phrase pendant que la suivante se synthétise. Détails : [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Machine à états : `IDLE` → (« Hey Iris ») → `ACTIVE` → (commande) → exécution → `ACTIVE` (fenêtre d'enchaînement) ou `IDLE`. Les intentions critiques passent par `CONFIRMING` (oui / non / délai de 12 s), y compris quand c'est le LLM qui les propose. « Mets-toi en pause » bascule en `PAUSED`, « mode dictée » en `DICTATING`. Les suggestions d'habitudes passent aussi par `CONFIRMING` : rien n'est fait ni programmé sans « oui ». Pendant qu'Iris parle, le micro est ignoré pour qu'elle ne s'entende pas elle-même. La voix est jouée phrase par phrase pendant que la suivante se synthétise. Détails : [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Installation sur Omarchy
 
@@ -227,6 +244,9 @@ Extras disponibles : `stt` (faster-whisper), `tts` (piper-tts), `audio` (soundde
 | `iris voices download kokoro [--model …]` · `iris voices list --engine kokoro` | Voix IA locale. |
 | `iris say --backend openai "…"` | Tester un backend de voix précis. |
 | `iris wakeword setup` | Modèles de base openWakeWord (si tu utilises un modèle « hey iris »). |
+| `iris automations [list / add "…" / delete <nom\|heure\|n°> / run <…>]` | Automatisations et rappels programmés à la voix ; `run` exécute tout de suite pour tester. |
+| `iris habits` | Routines horaires et enchaînements repérés dans le journal (ce qu'Iris pourrait te proposer). |
+| `iris prefs [list / reset]` | Préférences apprises à la voix (ton, vitesse, voix, noms d'activation, alias, suggestions refusées) ; `reset` les oublie. |
 
 ## Configuration
 
@@ -235,8 +255,9 @@ Fichier : `~/.config/iris/config.toml` (créé par `iris config init`, toutes le
 ```toml
 [assistant]
 language = "fr"          # ou "en"
-verbosity = "normal"     # concise | normal | chatty
-tone = "warm"            # warm | direct | coach      ← « Sois plus directe »
+verbosity = "normal"     # concise | normal | chatty   ← « Sois plus concise »
+tone = "warm"            # warm | direct | coach | playful | pro | zen   ← « Sois plus directe »
+quiet_hours = "22:00-07:00"   # réponses courtes et aucune suggestion la nuit
 
 [wake]
 phrases = ["hey iris", "iris", "ok iris", "salut iris"]
@@ -276,7 +297,20 @@ phrases = ["nettoie les paquets"]
 exec = "paru -Sc --noconfirm"
 confirm = true           # « Veux-tu vraiment lancer nettoyage ? »
 wait = true              # attend la fin avant de répondre
+
+[habits]                 # suggestions à partir de tes habitudes (accord explicite requis)
+enabled = true
+min_occurrences = 3      # jours distincts avant de proposer
+
+[automations]            # « chaque matin à 9 h, lance … », « rappelle-moi de … »
+enabled = true
+announce = true          # « Comme prévu : … »
+
+[phrases]                # remplace n'importe quelle réplique
+ack = ["Oui chef ?", "Je t'écoute."]
 ```
+
+Ce que tu dis à la voix (« sois plus directe », « parle plus vite », « appelle-toi Nova », « quand je dis mes mails, ouvre Thunderbird ») est mémorisé dans le journal et **prime sur ce fichier** au démarrage suivant : `iris prefs` l'affiche, `iris prefs reset` l'oublie.
 
 ## Voix IA
 
@@ -311,6 +345,16 @@ Iris parle aux modèles GPT / GLM / Kimi / MiniMax / DeepSeek via `/chat/complet
 
 Ce que le modèle reçoit : ta phrase (texte, jamais l'audio), la personnalité et le ton configurés, la liste des capacités d'Iris, et si `llm.context = true` l'heure, la fenêtre active, le workspace, la batterie et les trois dernières actions du journal. Il répond en JSON : `{"action": "brightness_set", "slots": {"n": 60}}`, `{"reply": "…"}` ou `{"ignore": true}`. Une action proposée par le modèle passe par les mêmes confirmations qu'une commande vocale : le LLM ne peut pas éteindre la machine sans ton « oui ».
 
+## Personnalisation, habitudes, automatisations
+
+Guides complets : [docs/PERSONALIZATION.md](docs/PERSONALIZATION.md) et [docs/AUTOMATIONS.md](docs/AUTOMATIONS.md).
+
+**Elle s'adapte à toi, à la voix.** « Sois plus directe / taquine / pro / zen / motivante », « sois plus concise », « parle en anglais », « parle plus vite », « utilise la voix de Léa », « appelle-toi Nova », « quand je dis mes mails, ouvre Thunderbird » : chaque réglage s'applique immédiatement et survit aux redémarrages, sans toucher à `config.toml`. Le profil `assistant.personality` colore le LLM et la voix OpenAI ; `[phrases]` réécrit ses répliques ; `quiet_hours` la rend discrète la nuit.
+
+**Elle programme ce que tu lui demandes.** « Chaque matin à 9 h, lance mon workspace de dev », « en semaine à 8 h 30 ouvre le terminal », « tous les vendredis à 17 h mets le thème tokyo night », « rappelle-moi de sortir les poubelles à 20 h », « dans 25 minutes rappelle-moi la réunion ». Tout ce qu'Iris sait faire sans confirmation est programmable — et rien de ce qui en demande une : « Je ne programme pas une action qui demande une confirmation. » Les automatisations tournent dans la boucle vocale (pas de timer systemd), sont annoncées (« Comme prévu : ghostty est lancé. ») et se gèrent à la voix ou avec `iris automations`.
+
+**Elle apprend tes habitudes et propose — jamais plus.** À partir de son journal (14 jours), Iris repère les routines (une même action à la même demi-heure sur au moins trois jours) et les enchaînements (une action suivie d'une autre dans les deux minutes, au moins la moitié du temps). Dans un moment calme : « Tu fais souvent ouvrir spotify vers 9 h. Veux-tu que je m'en occupe chaque jour à 9 h ? » ; juste après une action : « Veux-tu aussi activer ne pas déranger ? ». « Oui » exécute ou programme, « non » enterre la suggestion pour de bon, le silence la reporte de 24 h. Une action à confirmation n'est jamais proposée. « Arrête de me proposer des suggestions » coupe tout ; `iris habits` montre ce qu'elle a remarqué.
+
 ## Lancement automatique
 
 `iris service install` écrit `~/.config/systemd/user/iris.service` et l'active. L'unité est liée à `graphical-session.target`, qu'Omarchy active via UWSM au démarrage d'Hyprland : Iris démarre avec ta session, s'arrête avec elle, et **redémarre seule en cas de plantage** (`Restart=on-failure`). Elle tourne dans `background.slice` avec une priorité réduite pour ne jamais gêner le bureau.
@@ -325,6 +369,8 @@ Alternative sans systemd : `hypr/iris-autostart.conf` (`exec-once = uwsm app -- 
 
 **Widget Waybar** : `contrib/waybar/iris.jsonc` ajoute un module `custom/iris` (icône micro qui change de couleur : écoute, réflexion, parole, dictée, pause ; clic = push-to-talk, clic droit = pause) avec son CSS `contrib/waybar/iris.css`. Mets `waybar_signal = 8` dans `[system]` pour un rafraîchissement instantané.
 
+**Widget Quickshell** : `contrib/quickshell/Iris.qml` affiche le même état dans une barre Quickshell (icône colorée par état, pulsation à l'écoute, clic = push-to-talk), en surveillant directement `state.json`. Voir `contrib/quickshell/README.md`.
+
 **Push-to-talk** : `contrib/hypr/iris.conf` propose `SUPER + ALT + Espace` → `iris trigger` (équivaut à « Hey Iris ») et `SUPER + ALT + P` → pause/reprise. À inclure depuis `~/.config/hypr/bindings.conf`.
 
 ## Vie privée et mode local
@@ -332,6 +378,7 @@ Alternative sans systemd : `hypr/iris-autostart.conf` (`exec-once = uwsm app -- 
 - **Par défaut, rien ne quitte la machine.** Transcription (faster-whisper) et synthèse (Piper) sont locales ; `privacy.allow_cloud = false` bloque tout backend réseau même s'il est configuré par erreur.
 - **L'audio du micro n'est jamais écrit sur le disque** : il vit en mémoire le temps de la transcription, puis disparaît.
 - **Le journal des actions** (`~/.local/state/iris/iris.db`) trace *ce qu'Iris a fait* (intention, paramètres, résultat, durée) pour la traçabilité demandée aux assistants qui pilotent un système. Il ne contient pas le texte de tes phrases sauf si `privacy.store_transcripts = true`. `iris journal --clear` l'efface ; `privacy.journal_actions = false` le désactive.
+- **Les habitudes sont calculées localement** à partir du journal des actions et ne sont jamais envoyées ; les préférences apprises et les automatisations vivent dans la même base (`iris prefs reset`, `iris automations delete`). Aucune suggestion n'agit sans ton « oui » ; aucune action à confirmation n'est programmable.
 - Les modèles sont téléchargés une fois (Hugging Face) puis lus hors-ligne.
 - Options cloud, toutes en opt-in explicite (`privacy.allow_cloud = true`) : cerveau LLM OpenCode / OpenAI / OpenRouter (texte des phrases hors règles et questions, plus le contexte listé ci-dessus), voix ElevenLabs, OpenAI ou Cartesia (texte des réponses), API Whisper d'OpenAI (repli STT). Les URL `localhost` (Ollama, Kokoro-FastAPI) restent permises sans ce drapeau. Le pont Claude Code envoie à Claude *uniquement* le texte de la demande « demande à Claude … », via ton abonnement.
 
@@ -345,8 +392,11 @@ iris/
 ├── app.py            assemblage des composants      │   ├── assistant.py   machine à états + boucle vocale
 ├── config.py         config TOML → dataclasses      │   ├── router.py      intention → action → réponse
 ├── doctor.py         diagnostic                     │   ├── phrasebook.py  réponses fr/en, ton, verbosité
-├── service.py        unité systemd                  │   └── journal.py     SQLite : actions, prefs, transcriptions
-├── audio/            capture, VAD, lecture, bips    │   └── status.py      état JSON pour Waybar + pid
+├── service.py        unité systemd                  │   ├── journal.py     SQLite : actions, prefs, mémoire, tâches, automations
+├── audio/            capture, VAD, lecture, bips    │   ├── prefs.py       préférences apprises (appliquées à la config)
+│                                                    │   ├── habits.py      routines et enchaînements depuis le journal
+│                                                    │   ├── scheduler.py   automatisations et rappels (grammaire fr/en)
+│                                                    │   └── status.py      état JSON pour Waybar / Quickshell + pid
 ├── wakeword/         transcript (flou) / openWakeWord├── actions/
 ├── stt/              faster-whisper, fallback cloud  │   ├── system.py      run / launch (uwsm, systemd-run)
 ├── tts/              kokoro, openai_speech, piper,   │   ├── hyprland.py, monitors.py
@@ -358,8 +408,8 @@ iris/
 ├── agents/           runner : claude, opencode, codex,│   ├── projects.py    éditeur + terminal dans un projet
 │                     gemini en arrière-plan          │   └── omarchy.py     thèmes, lock, screenshot, webapps
 └── data/             config par défaut, alias apps   core/tasks.py  tâches + surveillance ; core/memory.py  faits, historique
-tests/                336 tests (NLU, wake, routeur, machine à états, LLM, voix, tâches, mémoire, agents, CLI)
-scripts/install.sh    installation Omarchy            systemd/iris.service   hypr/   contrib/waybar/
+tests/                370 tests (NLU, wake, routeur, machine à états, LLM, voix, tâches, mémoire, agents, habitudes, automatisations, CLI)
+scripts/install.sh    installation Omarchy            systemd/iris.service   hypr/   contrib/waybar/   contrib/quickshell/
 ```
 
 Principes : dépendances lourdes importées à la demande (le cœur ne requiert que numpy) ; chaque backend a un repli ; toute interaction système passe par `actions/system.py` (donc simulable dans les tests) ; toute erreur d'action devient une réponse parlée, jamais un plantage.
@@ -371,13 +421,14 @@ Détail par phase, avec les tâches : [docs/ROADMAP.md](docs/ROADMAP.md).
 - [x] **Phase 1 — Prototype vocal** (v0.1) : activation « Hey Iris » (transcription floue, openWakeWord optionnel), transcription locale Whisper, VAD, commandes simples fr/en, voix Piper, confirmations, journal SQLite, mode texte, CLI, diagnostic, service systemd, script d'installation Omarchy, README.
   - [ ] Validation sur machine Omarchy réelle et calibration des seuils (à faire avec les premiers retours).
   - [ ] Modèle openWakeWord « hey iris » pré-entraîné fourni dans le dépôt.
-- [x] **Phase 2 — Intégration système** *(cette version, v0.2)* : dictée (`wtype`, mode dictée continue), multi-écrans, Bluetooth / Wi-Fi / mode avion / batterie / sortie audio, notifications mako (lecture, effacement, ne pas déranger), sessions de workspaces, plusieurs commandes par phrase, push-to-talk (`iris trigger` + raccourci Hyprland), état pour Waybar, langue de réponse automatique.
+- [x] **Phase 2 — Intégration système** (v0.2) : dictée (`wtype`, mode dictée continue), multi-écrans, Bluetooth / Wi-Fi / mode avion / batterie / sortie audio, notifications mako (lecture, effacement, ne pas déranger), sessions de workspaces, plusieurs commandes par phrase, push-to-talk (`iris trigger` + raccourci Hyprland), état pour Waybar, langue de réponse automatique.
   - [x] **Voix IA** : ElevenLabs (défaut dès qu'une clé est présente : bibliothèque de voix françaises, réglages d'expressivité, continuité entre phrases), OpenAI `gpt-4o-mini-tts` et serveurs compatibles, Cartesia Sonic, Kokoro local facultatif ; cache disque et lecture phrase par phrase.
   - [x] **Cerveau LLM** (avancé depuis la phase 3) : OpenCode Go / Zen, OpenAI, OpenRouter, Ollama ; repli sur phrase inconnue, questions ouvertes, personnalité, contexte, historique de conversation.
-  - [ ] Widget Quickshell (module Waybar livré).
-- [x] **Phase 3 — Agents + mémoire** *(cette version, v0.3)* : tâches en arrière-plan annoncées à la fin (« lance / surveille la compilation »), agents Claude Code / OpenCode / Codex / Gemini lancés à la voix dans le dossier d'un projet (connexion propre à chaque outil, pas de clé API), ouverture de projets, voix → terminal avec Entrée, mémoire persistante (faits, historique LLM), instantanés de session et reprise proposée au démarrage, réponses LLM en streaming, outils du modèle (calcul, presse-papiers, fichier, mémoire, tâches), texte d'origine (accents, majuscules) conservé pour la dictée, les prompts et la mémoire.
+  - [x] Widget Quickshell (`contrib/quickshell`, livré en phase 4).
+- [x] **Phase 3 — Agents + mémoire** (v0.3) : tâches en arrière-plan annoncées à la fin (« lance / surveille la compilation »), agents Claude Code / OpenCode / Codex / Gemini lancés à la voix dans le dossier d'un projet (connexion propre à chaque outil, pas de clé API), ouverture de projets, voix → terminal avec Entrée, mémoire persistante (faits, historique LLM), instantanés de session et reprise proposée au démarrage, réponses LLM en streaming, outils du modèle (calcul, presse-papiers, fichier, mémoire, tâches), texte d'origine (accents, majuscules) conservé pour la dictée, les prompts et la mémoire.
   - [ ] Dialogue suivi avec un agent interactif ; restauration des fichiers ouverts dans l'éditeur.
-- [ ] **Phase 4 — Personnalisation + apprentissage** : profil de personnalité libre, apprentissage des habitudes depuis le journal, suggestions d'automatisations récurrentes, planificateur (« chaque matin à 9 h… »).
+- [x] **Phase 4 — Personnalisation + apprentissage** *(cette version, v0.4)* : style, voix, langue et nom d'activation réglés à la voix et mémorisés (six tons, `iris prefs`), alias appris, profil de personnalité jusque dans la voix, phrases personnalisées, heures calmes ; habitudes déduites du journal (routines horaires, enchaînements) et suggestions à accord explicite ; planificateur intégré (« chaque matin à 9 h… », « en semaine… », « tous les vendredis… ») et rappels (« rappelle-moi de … à 20 h », « dans 25 minutes… ») avec refus des actions critiques ; widget Quickshell.
+  - [ ] Planning avancé (« toutes les 2 heures »), automatisations multi-actions, profils par contexte.
 - [ ] **Phase 5 — Mode privé + performances** : chiffrement du journal, effacement automatique, *barge-in*, streaming STT, front-end audio en Rust (VAD + wake word), support Parakeet / whisper.cpp / GPU.
 
 ## Idées pour la suite
@@ -390,7 +441,7 @@ Détail par phase, avec les tâches : [docs/ROADMAP.md](docs/ROADMAP.md).
 - Réponses contextuelles au workspace actif (« ferme ça » = la fenêtre active).
 - Intégration Walker : ouvrir le lanceur avec la requête pré-remplie quand l'app est inconnue.
 - Plugins : dossier `~/.config/iris/plugins/` de scripts déclarant leurs phrases.
-- Retour visuel : bulle Quickshell « j'écoute / je réfléchis / j'exécute ».
+- Retour visuel : bulle Quickshell animée « j'écoute / je réfléchis / j'exécute » (le widget d'état existe).
 - Synchronisation optionnelle et chiffrée des préférences entre machines.
 
 ## Limitations connues
@@ -406,6 +457,9 @@ Détail par phase, avec les tâches : [docs/ROADMAP.md](docs/ROADMAP.md).
 - Les décisions du LLM (phrase hors règles) restent synchrones (une à trois secondes, « réfléchit » dans le widget) ; les réponses aux questions sont lues en streaming. Les agents tournent en arrière-plan et Iris ne lit que leur réponse finale.
 - Le client OpenCode Zen / Go est validé par des tests à réponses simulées, pas encore par un appel réel (aucune clé disponible pendant le développement). Les endpoints et modèles viennent de la documentation OpenCode de septembre 2026 ; `iris llm models` liste ce que ton compte voit vraiment.
 - Sauvegarder une session capture les classes de fenêtres et tente d'en déduire la commande : les applications lancées par un script exotique peuvent être manquées.
+- Les habitudes demandent quelques jours d'usage (trois jours distincts par défaut) et un journal actif (`privacy.journal_actions`). Les routines sont regroupées par demi-heure : une action faite « vers 9 h » un jour et « vers 10 h » le lendemain n'est pas une routine.
+- Les automatisations ne s'exécutent que pendant que `iris run` tourne (c'est voulu) ; une occurrence manquée de plus de 10 minutes est sautée, sauf les rappels, toujours rattrapés. Une automatisation ne porte qu'une action.
+- Une préférence dite à la voix (ton, vitesse, voix…) l'emporte sur `config.toml` jusqu'à `iris prefs reset` : si un réglage du fichier semble ignoré, regarde `iris prefs`.
 
 ## Dépannage
 
@@ -430,16 +484,20 @@ Détail par phase, avec les tâches : [docs/ROADMAP.md](docs/ROADMAP.md).
 | « Les agents sont désactivés » | `[agents] enabled = true` ; `iris agents` montre les CLI trouvés (`claude`, `opencode`, `codex`, `gemini`) ; connecte-toi une fois dans chaque outil (`claude login`). |
 | « Je ne trouve pas de tâche … » | Déclare-la dans `[[tasks]]` (nom + phrases + exec), ou utilise « surveille <nom du processus> » pour un processus déjà lancé. |
 | Iris ne propose jamais de reprendre la session | `assistant.resume_prompt = true` ; l'instantané doit dater d'au moins `memory.resume_min_age_min` minutes et contenir deux applications. |
+| Iris ne fait jamais de suggestion | `iris habits` doit montrer une routine ou un enchaînement (trois jours distincts, journal actif) ; `[habits] enabled = true` et pas de « arrête de me proposer » mémorisé (`iris prefs`) ; hors `quiet_hours` ; une proposition de routine au plus par `cooldown_hours`, à ± 30 min de l'heure habituelle, Iris en veille. |
+| Une automatisation ne s'est pas exécutée | `iris automations` la liste ? Le service tournait à l'heure dite (fenêtre de 10 min) ? Elle est refusée si l'action demande une confirmation. `iris automations run <nom>` la teste tout de suite ; `journalctl --user -u iris` montre « Automatisation : … ». |
+| « Je n'ai pas compris quoi faire à ce moment-là » | L'horaire est reconnu mais pas l'action : reformule-la comme une commande ordinaire (« lance spotify », « ouvre le terminal », une phrase de `[[commands]]`) ; `iris ask "…"` sans l'horaire doit marcher. |
+| Un réglage de `config.toml` (ton, voix, vitesse) est ignoré | Une préférence dite à la voix prime : `iris prefs` l'affiche, `iris prefs reset` l'efface. |
 
 ## Développement
 
 ```bash
 uv venv .venv && uv pip install --python .venv/bin/python -e ".[dev]"
-.venv/bin/pytest            # 336 tests, ~2 s, aucun matériel requis
+.venv/bin/pytest            # 370 tests, ~3 s, aucun matériel requis
 .venv/bin/ruff check iris tests && .venv/bin/ruff format iris tests
 .venv/bin/iris repl         # tester la compréhension au clavier
 ```
 
-Ajouter une commande : une `Rule` dans `iris/nlu/intents.py`, un `_h_<nom>` dans `iris/core/router.py`, ses phrases dans `iris/core/phrasebook.py` (fr **et** en), un test dans `tests/`. Ajouter un alias d'application : `iris/data/apps.toml`.
+Ajouter une commande : une `Rule` dans `iris/nlu/intents.py`, un `_h_<nom>` dans `iris/core/router.py`, ses phrases dans `iris/core/phrasebook.py` (fr **et** en), un test dans `tests/`. Pour qu'elle soit programmable et suggérable : son nom dans `AUTOMATABLE` et sa description dans `iris/core/habits.py`. Ajouter un alias d'application : `iris/data/apps.toml`.
 
 Contributions bienvenues — voir [CONTRIBUTING.md](CONTRIBUTING.md). Licence [MIT](LICENSE).

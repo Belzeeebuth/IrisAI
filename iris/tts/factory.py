@@ -52,7 +52,9 @@ def build_backend(name: str, cfg: Config):
             raise RuntimeError(
                 "tts.backend = 'openai' vers un serveur distant nécessite privacy.allow_cloud = true"
             )
-        return OpenAISpeechTTS(cfg.tts, language, cfg.assistant.tone, player, _cache(cfg))
+        tts = OpenAISpeechTTS(cfg.tts, language, cfg.assistant.tone, player, _cache(cfg))
+        tts.personality = cfg.assistant.personality
+        return tts
     if name == "cartesia":
         from iris.tts.cartesia import CartesiaTTS
 

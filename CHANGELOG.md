@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.0 — Phase 4 : personnalisation, habitudes, automatisations
+
+- **Style à la voix** : « sois plus directe / taquine / pro / zen / motivante / chaleureuse », « sois plus concise / bavarde », « réponses normales », « parle en anglais / français » ; trois nouveaux tons (`playful`, `pro`, `zen`) avec variantes de réponses. Les préférences dites à la voix sont **mémorisées** (table `prefs`) et réappliquées au démarrage par-dessus `config.toml` ; `iris prefs [list|reset]`.
+- **Voix à la voix** : « parle plus vite / plus lentement / vitesse normale » (tous moteurs, mémorisé), « change de voix », « utilise la voix de Léa » (ElevenLabs par nom, OpenAI, Kokoro), mémorisée par moteur. La personnalité (`assistant.personality`) alimente aussi les instructions de la voix OpenAI.
+- **Nom d'activation appris** : « appelle-toi Nova » (rechargé à chaud, persistant).
+- **Alias appris** : « quand je dis mes mails, ouvre Thunderbird » (cible résolue en commande réelle ou `webapp:`), « quels sont mes alias ».
+- **Habitudes** (`[habits]`) : routines horaires et enchaînements détectés dans le journal (14 jours, 3 jours distincts) ; suggestions proactives avec accord explicite (« Tu fais souvent … vers 9 h, je m'en occupe ? », « Veux-tu aussi … ? »), refus définitif mémorisé, cooldown, jamais pour une action à confirmation ; « quelles sont mes habitudes », « arrête de me proposer des suggestions », `iris habits`.
+- **Automatisations** (`[automations]`, table `automations`) : « chaque matin à 9 h lance spotify », « en semaine à 8 h 30 … », « tous les vendredis à 17 h … », « every weekday at 8:30 … » ; liste / suppression à la voix ; exécution par la boucle vocale (« Comme prévu : … »), refus des actions à confirmation ; `iris automations [list|add|delete|run]`.
+- **Rappels** : « rappelle-moi de … à 20 h », « dans 25 minutes rappelle-moi … », « demain à 9 h rappelle-moi … » → voix + notification critique, rattrapés après un redémarrage.
+- **Heures calmes** (`assistant.quiet_hours`) : réponses concises, aucune suggestion. **Phrases personnalisées** (`[phrases]`) pour remplacer n'importe quelle réplique.
+- **Widget Quickshell** (`contrib/quickshell/Iris.qml`).
+- Intégré depuis les retours de terrain : `iris say --voice`, alias `opencode` (TUI dans le terminal), annonce du programme lancé dans le terminal plutôt que de l'émulateur, en-tête `x-opencode-session` et `User-Agent` versionné exigés par OpenCode Go.
+- 92 intentions, 370 tests.
+
 ## 0.3.0 — Phase 3 : tâches, agents, projets, mémoire
 
 - **Tâches en arrière-plan** (`[[tasks]]`) : lancement, surveillance d'un processus existant, état, annulation, lecture du résultat ; annonce vocale et notification à la fin, différées pendant une confirmation ou une dictée ; historique `iris tasks`.

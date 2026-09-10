@@ -25,7 +25,8 @@ class AssistantConfig:
     follow_up_window_s: float = 5.0
     confirm_timeout_s: float = 12.0
     ack_sound: bool = True
-    resume_prompt: bool = False  # au démarrage : « Veux-tu reprendre ta session d'hier ? »
+    resume_prompt: bool = False
+    quiet_hours: str = ""  # ex. "22:00-07:00" : réponses concises, aucune suggestion proactive  # au démarrage : « Veux-tu reprendre ta session d'hier ? »
 
 
 @dataclass
@@ -177,6 +178,27 @@ class MemoryConfig:
 
 
 @dataclass
+class HabitsConfig:
+    enabled: bool = True
+    suggest_follow_ups: bool = (
+        True  # « Veux-tu aussi … ? » après une action souvent suivie d'une autre
+    )
+    suggest_routines: bool = (
+        True  # « Tu lances souvent X vers 9 h, je m'en occupe automatiquement ? »
+    )
+    window_days: int = 14
+    min_occurrences: int = 3
+    cooldown_hours: int = 24
+
+
+@dataclass
+class AutomationsConfig:
+    enabled: bool = True
+    check_interval_s: int = 30
+    announce: bool = True  # « Comme prévu : … » quand une automatisation s'exécute
+
+
+@dataclass
 class BackgroundTask:
     name: str
     phrases: list[str]
@@ -248,6 +270,9 @@ class Config:
     agents: AgentsConfig = field(default_factory=AgentsConfig)
     llm: LLMConfig = field(default_factory=LLMConfig)
     memory: MemoryConfig = field(default_factory=MemoryConfig)
+    habits: HabitsConfig = field(default_factory=HabitsConfig)
+    automations: AutomationsConfig = field(default_factory=AutomationsConfig)
+    phrases: dict[str, Any] = field(default_factory=dict)
     apps: dict[str, str] = field(default_factory=dict)
     projects: dict[str, str] = field(default_factory=dict)
     tasks: list[BackgroundTask] = field(default_factory=list)
@@ -279,6 +304,8 @@ SECTION_TYPES: dict[str, type] = {
     "agents": AgentsConfig,
     "llm": LLMConfig,
     "memory": MemoryConfig,
+    "habits": HabitsConfig,
+    "automations": AutomationsConfig,
 }
 
 
@@ -322,6 +349,8 @@ def config_from_dict(data: dict[str, Any], source: Path | None = None) -> Config
     cfg.apps = {str(k): str(v) for k, v in apps.items()} if isinstance(apps, dict) else {}
     bt = data.get("bluetooth", {})
     cfg.bluetooth = {str(k): str(v) for k, v in bt.items()} if isinstance(bt, dict) else {}
+    phrases = data.get("phrases", {})
+    cfg.phrases = {str(k): v for k, v in phrases.items()} if isinstance(phrases, dict) else {}
     projects = data.get("projects", {})
     cfg.projects = (
         {str(k): str(v) for k, v in projects.items()} if isinstance(projects, dict) else {}

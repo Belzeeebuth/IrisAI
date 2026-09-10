@@ -108,3 +108,17 @@ def test_agents_and_projects_cli(capsys, tmp_path, monkeypatch) -> None:
     assert "demo" in capsys.readouterr().out
     assert main(["projects", "demo"]) == 0
     assert main(["projects", "zzz"]) == 1
+
+
+def test_automations_habits_prefs_cli(capsys) -> None:
+    assert main(["automations", "add", "chaque matin à 9 h lance spotify"]) == 0
+    assert main(["automations"]) == 0
+    assert "chaque jour à 9 h : ouvrir spotify" in capsys.readouterr().out
+    assert main(["automations", "delete", "spotify"]) == 0
+    assert main(["automations", "delete", "spotify"]) == 1
+    assert main(["habits"]) == 0
+    assert "Aucune habitude" in capsys.readouterr().out
+    assert main(["ask", "sois", "plus", "directe"]) == 0
+    assert main(["prefs"]) == 0
+    assert "style.tone" in capsys.readouterr().out
+    assert main(["prefs", "reset"]) == 0

@@ -30,7 +30,7 @@ Objectif : dire « Hey Iris, monte le son » et que ça marche, en local.
 Objectif : Iris devient un citoyen du bureau Omarchy.
 
 - [x] Dictée : « écris : … » tape dans la fenêtre active (`wtype` → `ydotool` → presse-papiers) ; mode dictée continue jusqu'à « fin de dictée »
-- [x] Widget d'état Waybar (`iris status --waybar`, `contrib/waybar`, signal de rafraîchissement) — [ ] variante Quickshell
+- [x] Widget d'état Waybar (`iris status --waybar`, `contrib/waybar`, signal de rafraîchissement) — [x] variante Quickshell (`contrib/quickshell`, phase 4)
 - [x] Notifications mako : lecture résumée de l'historique, effacement, ne pas déranger
 - [x] Sessions de workspaces nommées (`[[sessions]]`) + sauvegarde des fenêtres ouvertes
 - [x] Multi-écrans : « envoie ça sur l'écran de droite », « va sur l'écran de gauche »
@@ -41,7 +41,6 @@ Objectif : Iris devient un citoyen du bureau Omarchy.
 - [x] **Voix IA** : Kokoro local (défaut), OpenAI-compatible (`gpt-4o-mini-tts`, Kokoro-FastAPI, Speaches), ElevenLabs ; lecture en pipeline phrase par phrase
 - [x] **Cerveau LLM** (avancé depuis la phase 3) : OpenCode Go / Zen, OpenAI, OpenRouter, Ollama, custom ; repli NLU avec liste des capacités en JSON, questions ouvertes, personnalité, contexte, historique
 - [ ] Notifications riches émises par Iris (icône, actions cliquables)
-- [ ] Widget Quickshell
 
 ## Phase 3 — Agents IA + mémoire contextuelle ✅ (v0.3)
 
@@ -59,14 +58,23 @@ Objectif : Iris agit dans la durée et se souvient.
 - [ ] Dialogue suivi avec un agent interactif (relire ses questions, répondre à la voix)
 - [ ] Restauration des fichiers ouverts dans l'éditeur lors d'une reprise de session
 
-## Phase 4 — Personnalisation + apprentissage
+## Phase 4 — Personnalisation + apprentissage ✅ (v0.4)
 
-- [ ] Profil de personnalité libre (`assistant.personality = "Sois directe, tutoie, pas de blabla"`) appliqué aux réponses générées
-- [ ] Apprentissage des habitudes depuis le journal : fréquences par heure / jour → suggestions (« Tu lances souvent Spotify à 9 h, je le fais automatiquement ? »)
-- [ ] Planificateur : « chaque matin à 9 h, lance mon workspace de dev » → unité systemd timer générée
-- [ ] Alias appris : « quand je dis "mon éditeur", c'est Zed » sans éditer la config
-- [ ] Voix : choix du locuteur, vitesse, réglages par contexte
-- [ ] Multi-langue dans la session
+Objectif : Iris s'adapte à toi, à la voix, et te propose des raccourcis sans jamais agir sans ton accord. Guides : [PERSONALIZATION.md](PERSONALIZATION.md), [AUTOMATIONS.md](AUTOMATIONS.md).
+
+- [x] Style à la voix : « sois plus directe / taquine / pro / zen / motivante / chaleureuse », « sois plus concise / bavarde », « parle en anglais » — six tons (`warm`, `direct`, `coach`, `playful`, `pro`, `zen`) avec variantes de réponses, mémorisés dans le journal et réappliqués au démarrage par-dessus `config.toml` (`iris prefs`)
+- [x] Profil de personnalité libre (`assistant.personality`) transmis au LLM **et** aux instructions de la voix OpenAI ; phrases personnalisées `[phrases]` pour remplacer n'importe quelle réplique
+- [x] Voix à la voix : « parle plus vite / plus lentement / vitesse normale » (tous moteurs), « change de voix », « utilise la voix de Léa » (ElevenLabs par nom, OpenAI, Kokoro), mémorisées par moteur
+- [x] Nom d'activation appris : « appelle-toi Nova » (détecteur rechargé à chaud, persistant)
+- [x] Alias appris : « quand je dis mes mails, ouvre Thunderbird » (cible résolue en commande réelle ou web-app), « quels sont mes alias »
+- [x] Apprentissage des habitudes depuis le journal (14 jours, 3 jours distincts minimum) : routines horaires par demi-heure, enchaînements à moins de deux minutes ; « quelles sont mes habitudes », `iris habits`
+- [x] Suggestions proactives avec accord explicite : « Tu fais souvent ouvrir spotify vers 9 h, je m'en occupe chaque jour à 9 h ? » dans un moment calme, « Veux-tu aussi activer ne pas déranger ? » après une action ; refus définitif mémorisé, cooldown, jamais pour une action à confirmation ; « arrête de me proposer des suggestions »
+- [x] Planificateur intégré (sans systemd timer : les automatisations vivent dans la session graphique et peuvent refuser les actions critiques) : « chaque matin à 9 h, lance mon workspace de dev », « en semaine à 8 h 30 … », « tous les vendredis à 17 h … », « every weekday at 8:30 … » ; liste, suppression, exécution à l'heure dite avec « Comme prévu : … » ; `iris automations`
+- [x] Rappels : « rappelle-moi de sortir les poubelles à 20 h », « dans 25 minutes rappelle-moi … », « demain à 9 h … » → voix + notification critique ; rattrapés si Iris était éteinte
+- [x] Heures calmes (`assistant.quiet_hours = "22:00-07:00"`) : réponses concises, aucune suggestion
+- [x] Widget Quickshell (`contrib/quickshell/Iris.qml`) lisant le même état JSON que Waybar
+- [ ] Planning avancé (« toutes les 2 heures », « le 1er du mois »), automatisation multi-actions
+- [ ] Profils par contexte (travail / maison) changeant apps, ton et verbosité d'un mot
 
 ## Phase 5 — Mode privé + performances
 
@@ -78,3 +86,4 @@ Objectif : Iris agit dans la durée et se souvient.
 - [ ] Moteurs alternatifs : whisper.cpp, Parakeet (NeMo), GPU (CUDA / ROCm)
 - [ ] Modèle wake word « hey iris » de qualité (jeu de données + entraînement reproductible)
 - [ ] Audit sécurité : liste blanche des commandes shell, sandbox des commandes perso
+- [ ] Effacement automatique des habitudes / préférences apprises avec la rétention du journal

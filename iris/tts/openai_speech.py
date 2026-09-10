@@ -28,12 +28,18 @@ PCM_RATE = 24000
 
 STYLE_BY_TONE = {
     "fr": {
+        "playful": "Parle en français, d'une voix joueuse, complice et pleine d'humour, rythme vif.",
+        "pro": "Parle en français, d'une voix professionnelle, nette et courtoise.",
+        "zen": "Parle en français, d'une voix calme, douce et apaisante, rythme lent.",
         "warm": "Parle en français, d'une voix chaleureuse, naturelle et posée, avec un léger sourire. "
         "Assistante bienveillante, jamais robotique.",
         "direct": "Parle en français, d'une voix claire, directe et efficace, sans emphase inutile.",
         "coach": "Parle en français, d'une voix énergique et encourageante, comme une coach motivante.",
     },
     "en": {
+        "playful": "Speak playfully, with humor and a lively rhythm.",
+        "pro": "Speak professionally, crisp and courteous.",
+        "zen": "Speak calmly, softly and soothingly, at a slow pace.",
         "warm": "Speak warmly and naturally, calm and friendly, with a slight smile. Never robotic.",
         "direct": "Speak clearly, directly and efficiently, without unnecessary emphasis.",
         "coach": "Speak with energy and encouragement, like a motivating coach.",
@@ -57,6 +63,7 @@ class OpenAISpeechTTS:
         self.cache = cache
         self.language = language if language in STYLE_BY_TONE else "fr"
         self.tone = tone
+        self.personality = ""
         self.base_url = cfg.openai_base_url.rstrip("/")
         self.api_key = os.environ.get(cfg.openai_api_key_env, "") if cfg.openai_api_key_env else ""
         if not self.api_key and not is_local_url(self.base_url):
@@ -70,9 +77,13 @@ class OpenAISpeechTTS:
 
     def instructions(self, language: str | None = None) -> str:
         if self.cfg.openai_instructions:
-            return self.cfg.openai_instructions
-        table = STYLE_BY_TONE.get(language or self.language, STYLE_BY_TONE["fr"])
-        return table.get(self.tone, table["warm"])
+            base = self.cfg.openai_instructions
+        else:
+            table = STYLE_BY_TONE.get(language or self.language, STYLE_BY_TONE["fr"])
+            base = table.get(self.tone, table.get("warm", ""))
+        if self.personality:
+            base = f"{base} Personnalité : {self.personality}"
+        return base
 
     def _request(self, payload: dict, timeout: float = 60) -> tuple[bytes, str]:
         data = json.dumps(payload).encode("utf-8")

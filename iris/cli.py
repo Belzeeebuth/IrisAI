@@ -157,6 +157,27 @@ def _parser() -> argparse.ArgumentParser:
     projects = sub.add_parser("projects", help="projets connus (config + dossiers de projets)")
     projects.add_argument("query", nargs="?", default=None)
 
+    automations = sub.add_parser("automations", help="automatisations et rappels programmés")
+    auto_sub = automations.add_subparsers(dest="auto_cmd", required=False)
+    auto_sub.add_parser("list")
+    ad = auto_sub.add_parser("delete")
+    ad.add_argument("query", nargs="+")
+    ar = auto_sub.add_parser("run", help="exécuter maintenant (test)")
+    ar.add_argument("query", nargs="+")
+    aa = auto_sub.add_parser(
+        "add", help='ex. iris automations add "chaque matin à 9 h lance spotify"'
+    )
+    aa.add_argument("text", nargs="+")
+
+    sub.add_parser("habits", help="habitudes détectées (routines horaires, enchaînements)")
+
+    prefs = sub.add_parser(
+        "prefs", help="préférences apprises à la voix (ton, voix, alias, activation…)"
+    )
+    prefs_sub = prefs.add_subparsers(dest="prefs_cmd", required=False)
+    prefs_sub.add_parser("list")
+    prefs_sub.add_parser("reset")
+
     service = sub.add_parser("service", help="service systemd utilisateur")
     service_sub = service.add_subparsers(dest="service_cmd", required=True)
     si = service_sub.add_parser("install")
@@ -712,6 +733,86 @@ def cmd_projects(cfg: Config, args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_automations(cfg: Config, args: argparse.Namespace) -> int:
+    from iris.app import build_assistant
+    from iris.core.habits import describe
+
+    assistant = build_assistant(cfg, text_mode=True, speak=False)
+    router = assistant.router
+    scheduler = router.scheduler
+    cmd = args.auto_cmd or "list"
+    if cmd == "list":
+        items = scheduler.list()
+        if not items:
+            print("Aucune automatisation.")
+        for a in items:
+            action = (
+                a.name
+                if a.intent == "reminder_fire"
+                else describe(a.intent, a.slots, cfg.reply_language)
+            )
+            print(f"{a.id:3d}. {a.describe(cfg.reply_language, action)}  [{a.source}]")
+        return 0
+    if cmd == "add":
+        reply = assistant.handle_text(" ".join(args.text))
+        return 0 if reply is not None and reply.ok else 1
+    query = " ".join(args.query)
+    auto = scheduler.find(query)
+    if auto is None:
+        print("Automatisation introuvable.", file=sys.stderr)
+        return 1
+    if cmd == "delete":
+        scheduler.delete(str(auto.id))
+        print(f"Supprimé : {auto.name}")
+    elif cmd == "run":
+        reply = router.run_automation(auto)
+        print(reply.text)
+        return 0 if reply.ok else 1
+    return 0
+
+
+def cmd_habits(cfg: Config, args: argparse.Namespace) -> int:
+    from iris.app import build_journal
+    from iris.core.habits import Habits, describe, key_to_intent
+
+    habits = Habits(build_journal(cfg), cfg.habits.window_days, cfg.habits.min_occurrences)
+    routines = habits.routines()
+    follow_ups = habits.follow_ups()
+    if not routines and not follow_ups:
+        print("Aucune habitude détectée pour l'instant (il faut plusieurs jours d'utilisation).")
+        return 0
+    for r in routines:
+        days = "en semaine" if r.weekdays_only else "tous les jours"
+        print(
+            f"routine      {r.hour:2d}:{r.minute:02d} {days:14} {describe(r.intent, r.slots)}  ({r.count} jours)"
+        )
+    for key, fu in follow_ups.items():
+        first_intent, first_slots = key_to_intent(key)
+        print(
+            f"enchaînement {describe(first_intent, first_slots)} → {describe(fu.intent, fu.slots)}"
+            f"  ({fu.count} fois, {int(fu.ratio * 100)} %)"
+        )
+    return 0
+
+
+def cmd_prefs(cfg: Config, args: argparse.Namespace) -> int:
+    from iris.app import build_journal
+    from iris.core.prefs import Prefs
+
+    prefs = Prefs(build_journal(cfg))
+    if (args.prefs_cmd or "list") == "reset":
+        print(f"{prefs.reset()} préférence(s) effacée(s).")
+        return 0
+    items = prefs.all()
+    if not items:
+        print(
+            "Aucune préférence apprise (dis « sois plus directe », « parle plus vite », « appelle-toi Nova »…)."
+        )
+    for key, value in items.items():
+        print(f"{key:26} {value}")
+    return 0
+
+
 def cmd_service(cfg: Config, args: argparse.Namespace) -> int:
     from iris import service
 
@@ -749,6 +850,9 @@ COMMANDS = {
     "memory": cmd_memory,
     "agents": cmd_agents,
     "projects": cmd_projects,
+    "automations": cmd_automations,
+    "habits": cmd_habits,
+    "prefs": cmd_prefs,
 }
 
 

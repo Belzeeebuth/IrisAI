@@ -8,13 +8,14 @@
 name = "Iris"
 language = "fr"            # "fr" | "en" | "auto" (répond dans la langue entendue, transcription auto)
 verbosity = "normal"       # "concise" | "normal" | "chatty"
-tone = "warm"              # "warm" (chaleureuse) | "direct" (directe) | "coach"
-personality = ""           # profil libre pour le LLM, ex. "Tutoie-moi, sois directe et un peu taquine."
+tone = "warm"              # "warm" (chaleureuse) | "direct" | "coach" | "playful" (taquine) | "pro" | "zen"
+personality = ""           # profil libre pour le LLM et la voix OpenAI, ex. "Tutoie-moi, sois directe et un peu taquine."
 active_window_s = 8.0      # après « Hey Iris » seule, temps d'attente d'une commande (s)
 follow_up_window_s = 5.0   # après une commande, fenêtre pour enchaîner sans mot d'activation (s)
 confirm_timeout_s = 12.0   # délai de réponse à « Veux-tu vraiment … ? » (s)
 ack_sound = true           # petit signal sonore à l'activation (si un lecteur audio est disponible)
 resume_prompt = false      # au démarrage, proposer « Veux-tu reprendre ta session d'hier ? » (voir [memory])
+quiet_hours = ""           # ex. "22:00-07:00" : réponses concises et aucune suggestion proactive
 
 [wake]
 # "transcript"   : le mot d'activation est reconnu dans la transcription (aucun modèle à entraîner)
@@ -152,6 +153,30 @@ enabled = true
 snapshot_interval_min = 10 # instantané des fenêtres ouvertes (workspace par workspace) pour la reprise
 resume_min_age_min = 60    # ne proposer la reprise que si l'instantané date d'au moins une heure
 max_facts = 200
+
+# ----------------------------------------------------------------------------
+# Apprentissage des habitudes (local, depuis le journal) et automatisations programmées.
+# « Veux-tu aussi … ? » après une action souvent suivie d'une autre ; « tu lances souvent X vers 9 h,
+# je m'en occupe automatiquement ? ». Une suggestion refusée n'est plus reproposée.
+# ----------------------------------------------------------------------------
+[habits]
+enabled = true
+suggest_follow_ups = true
+suggest_routines = true
+window_days = 14           # période analysée
+min_occurrences = 3        # occurrences (jours distincts) avant de suggérer
+cooldown_hours = 24        # délai minimal entre deux suggestions du même type
+
+[automations]
+enabled = true             # « chaque matin à 9 h, lance mon workspace de dev », « rappelle-moi de … à 15 h »
+check_interval_s = 30
+announce = true            # « Comme prévu : … » à l'exécution
+
+# Phrases personnalisées : remplace n'importe quelle réplique d'Iris (clé = texte ou liste de variantes).
+# Clés : ack, greet, thanks_reply, done, not_understood, cancelled, follow_up, remembered, app_opened…
+[phrases]
+# ack = ["Oui chef ?", "Je t'écoute."]
+# greet = "Salut toi ! On fait quoi ?"
 
 # ----------------------------------------------------------------------------
 # Agents IA lancés à la voix, en arrière-plan : « demande à Claude de corriger les tests dans le projet X »

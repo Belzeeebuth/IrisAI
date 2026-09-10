@@ -9,7 +9,7 @@ from __future__ import annotations
 import random
 from typing import Any
 
-TONES = ("warm", "direct", "coach")
+TONES = ("warm", "direct", "coach", "playful", "pro", "zen")
 VERBOSITY = ("concise", "normal", "chatty")
 
 PHRASES: dict[str, dict[str, Any]] = {
@@ -18,6 +18,9 @@ PHRASES: dict[str, dict[str, Any]] = {
             "warm": ["Oui ?", "Je t'écoute.", "Oui, dis-moi."],
             "direct": ["Oui.", "J'écoute."],
             "coach": ["Je suis là. On fait quoi ?", "Oui, on y va ?"],
+            "playful": ["Oui, mon capitaine ?", "Je suis toute ouïe.", "Dis-moi tout."],
+            "pro": ["Oui ?", "Je vous écoute."],
+            "zen": ["Oui…", "Je t'écoute."],
         },
         "not_understood": {
             "concise": ["Pas compris."],
@@ -99,11 +102,20 @@ PHRASES: dict[str, dict[str, Any]] = {
             "warm": ["Bonjour ! Que puis-je faire pour toi ?", "Salut ! Je t'écoute."],
             "direct": ["Bonjour.", "Salut."],
             "coach": ["Bonjour ! Prêt à attaquer la journée ?", "Salut ! On commence par quoi ?"],
+            "playful": [
+                "Salut toi ! On fait quoi de beau ?",
+                "Coucou ! Prête à faire des bêtises ?",
+            ],
+            "pro": ["Bonjour. Que puis-je faire ?"],
+            "zen": ["Bonjour. Je suis là."],
         },
         "thanks_reply": {
             "warm": ["Avec plaisir.", "Je t'en prie."],
             "direct": ["De rien."],
             "coach": ["Avec plaisir, continue comme ça !"],
+            "playful": ["Avec plaisir, c'est mon métier.", "Je t'en prie, tu me gâtes."],
+            "pro": ["Je vous en prie."],
+            "zen": ["Avec plaisir."],
         },
         "who_are_you": "Je suis Iris, l'assistante vocale d'Omarchy. Je tourne entièrement sur cette machine.",
         "help": (
@@ -195,6 +207,64 @@ PHRASES: dict[str, dict[str, Any]] = {
         "resume_question": "Veux-tu reprendre ta session précédente : {apps} ?",
         "resume_none": "Je n'ai pas de session précédente à reprendre.",
         "status_done": "réussie",
+        # phase 4
+        "automation_created": "Programmé : {desc}.",
+        "automation_no_action": "Je n'ai pas compris quoi faire à ce moment-là. Redis-moi l'horaire et l'action.",
+        "automation_refused_confirm": "Je ne programme pas une action qui demande une confirmation.",
+        "automation_list_intro": "Tes automatisations : ",
+        "automation_none": "Aucune automatisation programmée.",
+        "automation_deleted": "Supprimé : {desc}.",
+        "automation_not_found": "Je ne trouve pas cette automatisation.",
+        "automation_running": {
+            "concise": "",
+            "normal": "Comme prévu : ",
+            "chatty": "Comme convenu, je m'en occupe : ",
+        },
+        "automations_disabled": "Les automatisations sont désactivées dans ma configuration.",
+        "reminder_created": "Je te le rappellerai {when} : {what}.",
+        "reminder_fire": "Rappel : {what}.",
+        "reminder_needs_time": "Quand veux-tu que je te le rappelle ? Par exemple « dans 20 minutes » ou « à 18 h ».",
+        "reminder_needs_text": "Que dois-je te rappeler ?",
+        "alias_learned": "D'accord : quand tu dis « {phrase} », j'ouvre {target}.",
+        "alias_list_intro": "Tes alias : ",
+        "alias_none": "Aucun alias appris. Dis « quand je dis mes mails, ouvre Thunderbird ».",
+        "voice_faster": "Je parle plus vite.",
+        "voice_slower": "Je parle plus lentement.",
+        "voice_normal": "Vitesse normale.",
+        "voice_changed": "Nouvelle voix : {voice}.",
+        "voice_unknown": "Je ne trouve pas cette voix. « iris voices list » les affiche.",
+        "voice_no_change": "Je ne peux pas changer de voix avec ce moteur. Précise un nom de voix.",
+        "style_tone_set": "D'accord, je serai plus {tone}.",
+        "style_verbosity_set": {
+            "concise": "Compris.",
+            "normal": "D'accord, {label}.",
+            "chatty": "D'accord, {label}. Tu me diras si ça te va.",
+        },
+        "verbosity_concise": "je ferai court",
+        "verbosity_normal": "réponses normales",
+        "verbosity_chatty": "je développerai davantage",
+        "tone_warm": "chaleureuse",
+        "tone_direct": "directe",
+        "tone_coach": "coach",
+        "tone_playful": "taquine",
+        "tone_pro": "professionnelle",
+        "tone_zen": "zen",
+        "language_set": "D'accord, je réponds en français.",
+        "wake_added": "Tu peux aussi m'appeler {name}.",
+        "suggestions_off": "Je ne ferai plus de suggestions.",
+        "suggestions_on": "Je te ferai à nouveau des suggestions.",
+        "suggestion_declined": {
+            "concise": "D'accord.",
+            "normal": "D'accord, je ne te le proposerai plus.",
+            "chatty": "Pas de souci, je ne te le proposerai plus.",
+        },
+        "follow_up_question": "Veux-tu aussi {action} ?",
+        "routine_question": "Tu fais souvent {action} vers {time}. Veux-tu que je m'en occupe {schedule} ?",
+        "habits_intro": "Ce que j'ai remarqué : ",
+        "habits_none": "Je n'ai pas encore repéré d'habitude. Laisse-moi quelques jours.",
+        "habit_routine": "{action} vers {time} ({count} fois)",
+        "habit_follow_up": "après {first}, souvent {second}",
+        "quiet_hours_on": "Heures calmes : je ferai court et sans suggestions.",
         "status_failed": "en échec",
         "status_cancelled": "annulée",
     },
@@ -203,6 +273,9 @@ PHRASES: dict[str, dict[str, Any]] = {
             "warm": ["Yes?", "I'm listening.", "Go ahead."],
             "direct": ["Yes."],
             "coach": ["I'm here. What are we doing?"],
+            "playful": ["Yes, captain?", "All ears."],
+            "pro": ["Yes?"],
+            "zen": ["Yes…", "I'm listening."],
         },
         "not_understood": {
             "concise": ["Didn't get that."],
@@ -276,11 +349,17 @@ PHRASES: dict[str, dict[str, Any]] = {
             "warm": ["Hello! What can I do for you?"],
             "direct": ["Hello."],
             "coach": ["Hello! Ready to tackle the day?"],
+            "playful": ["Hey you! What are we up to?"],
+            "pro": ["Hello. How can I help?"],
+            "zen": ["Hello. I'm here."],
         },
         "thanks_reply": {
             "warm": ["You're welcome."],
             "direct": ["Sure."],
             "coach": ["My pleasure, keep it up!"],
+            "playful": ["Anytime, it's what I do."],
+            "pro": ["You're welcome."],
+            "zen": ["With pleasure."],
         },
         "who_are_you": "I'm Iris, Omarchy's voice assistant. I run entirely on this machine.",
         "help": (
@@ -374,6 +453,64 @@ PHRASES: dict[str, dict[str, Any]] = {
         "resume_question": "Do you want to resume your previous session: {apps}?",
         "resume_none": "I have no previous session to resume.",
         "status_done": "succeeded",
+        # phase 4
+        "automation_created": "Scheduled: {desc}.",
+        "automation_no_action": "I didn't understand what to do at that time. Tell me the time and the action again.",
+        "automation_refused_confirm": "I don't schedule actions that require a confirmation.",
+        "automation_list_intro": "Your automations: ",
+        "automation_none": "No automation scheduled.",
+        "automation_deleted": "Deleted: {desc}.",
+        "automation_not_found": "I can't find that automation.",
+        "automation_running": {
+            "concise": "",
+            "normal": "As planned: ",
+            "chatty": "As agreed, I'm on it: ",
+        },
+        "automations_disabled": "Automations are disabled in my configuration.",
+        "reminder_created": "I'll remind you {when}: {what}.",
+        "reminder_fire": "Reminder: {what}.",
+        "reminder_needs_time": "When should I remind you? For example “in 20 minutes” or “at 6 pm”.",
+        "reminder_needs_text": "What should I remind you about?",
+        "alias_learned": "Okay: when you say “{phrase}”, I'll open {target}.",
+        "alias_list_intro": "Your aliases: ",
+        "alias_none": "No learned alias. Say “when I say my mails, open Thunderbird”.",
+        "voice_faster": "I'll speak faster.",
+        "voice_slower": "I'll speak more slowly.",
+        "voice_normal": "Normal speed.",
+        "voice_changed": "New voice: {voice}.",
+        "voice_unknown": "I can't find that voice. “iris voices list” shows them.",
+        "voice_no_change": "I can't switch voices with this engine. Give me a voice name.",
+        "style_tone_set": "Okay, I'll be more {tone}.",
+        "style_verbosity_set": {
+            "concise": "Got it.",
+            "normal": "Okay, {label}.",
+            "chatty": "Okay, {label}. Tell me if that works for you.",
+        },
+        "verbosity_concise": "I'll keep it short",
+        "verbosity_normal": "normal answers",
+        "verbosity_chatty": "I'll elaborate more",
+        "tone_warm": "warm",
+        "tone_direct": "direct",
+        "tone_coach": "coach-like",
+        "tone_playful": "playful",
+        "tone_pro": "professional",
+        "tone_zen": "zen",
+        "language_set": "Okay, I'll answer in English.",
+        "wake_added": "You can also call me {name}.",
+        "suggestions_off": "I'll stop making suggestions.",
+        "suggestions_on": "I'll make suggestions again.",
+        "suggestion_declined": {
+            "concise": "Okay.",
+            "normal": "Okay, I won't suggest it again.",
+            "chatty": "No problem, I won't suggest it again.",
+        },
+        "follow_up_question": "Do you also want me to {action}?",
+        "routine_question": "You often {action} around {time}. Do you want me to do it {schedule}?",
+        "habits_intro": "What I've noticed: ",
+        "habits_none": "I haven't spotted a habit yet. Give me a few days.",
+        "habit_routine": "{action} around {time} ({count} times)",
+        "habit_follow_up": "after {first}, often {second}",
+        "quiet_hours_on": "Quiet hours: I'll keep it short and skip suggestions.",
         "status_failed": "failed",
         "status_cancelled": "cancelled",
     },
@@ -387,17 +524,22 @@ class Phrasebook:
         verbosity: str = "normal",
         tone: str = "warm",
         seed: int | None = None,
+        overrides: dict[str, Any] | None = None,
     ) -> None:
         self.lang = lang if lang in PHRASES else "fr"
         self.verbosity = verbosity if verbosity in VERBOSITY else "normal"
         self.tone = tone if tone in TONES else "warm"
         self._rng = random.Random(seed)
+        self.overrides = dict(overrides or {})
 
     def get(self, key: str, **fmt: Any) -> str:
-        table = PHRASES[self.lang]
-        value = table.get(key)
-        if value is None:
-            value = PHRASES["fr"].get(key, key)
+        if key in self.overrides:
+            value = self.overrides[key]
+        else:
+            table = PHRASES[self.lang]
+            value = table.get(key)
+            if value is None:
+                value = PHRASES["fr"].get(key, key)
         text = self._resolve(value)
         try:
             return text.format(**fmt)

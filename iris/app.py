@@ -13,10 +13,13 @@ from iris.actions.sessions import SessionManager
 from iris.agents.runner import AgentRunner
 from iris.config import Config
 from iris.core.assistant import Assistant
+from iris.core.habits import Habits
 from iris.core.journal import Journal
 from iris.core.memory import Memory
 from iris.core.phrasebook import Phrasebook
+from iris.core.prefs import Prefs
 from iris.core.router import Router
+from iris.core.scheduler import Scheduler
 from iris.core.status import StatusWriter
 from iris.core.tasks import TaskManager
 from iris.nlu.intents import IntentParser
@@ -123,8 +126,14 @@ def build_assistant(
     with_status: bool = False,
     on_event=None,
 ) -> Assistant:
-    phrases = Phrasebook(cfg.reply_language, cfg.assistant.verbosity, cfg.assistant.tone)
     journal = build_journal(cfg)
+    prefs = Prefs(journal)
+    applied = prefs.apply(cfg)
+    if applied:
+        log.info("Préférences apprises appliquées : %s", ", ".join(applied))
+    phrases = Phrasebook(
+        cfg.reply_language, cfg.assistant.verbosity, cfg.assistant.tone, overrides=cfg.phrases
+    )
     apps = AppResolver(cfg.apps, cfg.system.terminal, cfg.system.browser, cfg.system.editor)
     sessions = SessionManager(cfg.sessions, journal, apps)
     custom_phrases = [p for c in cfg.commands for p in c.phrases]
@@ -133,6 +142,13 @@ def build_assistant(
     projects = ProjectResolver(cfg.projects, cfg.system.project_dirs, apps)
     agents = AgentRunner(cfg.agents, tasks, projects)
     brain = build_brain(cfg, journal, custom_phrases, sessions.names(), memory=memory, tasks=tasks)
+    parser = IntentParser(
+        cfg.commands,
+        session_phrases={s.name: s.phrases for s in cfg.sessions},
+        task_phrases={t.name: t.phrases for t in cfg.tasks},
+    )
+    habits = Habits(journal, cfg.habits.window_days, cfg.habits.min_occurrences)
+    scheduler = Scheduler(journal)
     router = Router(
         cfg,
         phrases,
@@ -144,11 +160,10 @@ def build_assistant(
         memory=memory,
         agents=agents,
         projects=projects,
-    )
-    parser = IntentParser(
-        cfg.commands,
-        session_phrases={s.name: s.phrases for s in cfg.sessions},
-        task_phrases={t.name: t.phrases for t in cfg.tasks},
+        prefs=prefs,
+        habits=habits,
+        scheduler=scheduler,
+        parser=parser,
     )
     tts = build_tts(cfg, prefer_console=not speak)
     stt = None

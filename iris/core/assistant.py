@@ -27,6 +27,7 @@ from iris.config import Config
 from iris.core.journal import Journal
 from iris.core.phrasebook import Phrasebook
 from iris.core.router import Reply, Router
+from iris.nlu.intents import CONFIRM_INTENTS as _CONFIRM
 from iris.nlu.intents import Intent, IntentParser, parse_yes_no
 from iris.nlu.split import split_commands
 
@@ -41,6 +42,15 @@ _GENERIC_INTENTS = {
     "type_text",
     "type_and_enter",
     "ask_llm",
+}
+# Intentions dont la consigne est un texte libre où un nom final compte plus qu'une activation.
+_PAYLOAD_INTENTS = {
+    "automation_create",
+    "reminder_create",
+    "open_project",
+    "ask_agent",
+    "remember",
+    "alias_learn",
 }
 
 
@@ -92,7 +102,14 @@ class Assistant:
         self._pending_events: list = []  # fins de tâches à annoncer quand l'état le permet
         self._last_snapshot = 0.0
         self._snapshots_enabled = False
+        self._suggestion_key: str | None = None
+        self._last_auto_check = 0.0
+        self._last_routine_check = 0.0
+        self._quiet_active = False
+        self._base_verbosity = phrases.verbosity
         self.running = False
+        if hasattr(router, "tts") and getattr(router, "tts", None) is None:
+            router.tts = tts
         self._tts_takes_language = "language" in inspect.signature(tts.speak).parameters
 
     # ================================================================== état / statut
@@ -183,6 +200,8 @@ class Assistant:
             return text
         if rest.name in _GENERIC_INTENTS and full.name not in _GENERIC_INTENTS:
             return text
+        if full.name in _PAYLOAD_INTENTS:
+            return text  # « chaque matin ouvre le projet iris » : le mot final fait partie de la consigne
         return match.remainder
 
     def process_command(self, text: str) -> Reply | None:
@@ -211,6 +230,7 @@ class Assistant:
         question = self.router.confirmation_question(intent)
         if question:
             self._pending = intent
+            self._suggestion_key = None  # une vraie confirmation, pas une suggestion
             self._set_state(State.CONFIRMING, intent.name)
             self._deadline = self.clock() + self.cfg.assistant.confirm_timeout_s
             self.speak(question)
@@ -260,7 +280,7 @@ class Assistant:
             text += self.p.get("follow_up")
         self.speak(text)
         self._apply_control(reply)
-        if reply.control is None:
+        if reply.control is None and not self._maybe_follow_up(intent, reply):
             self._after_reply(reply)
         return reply
 
@@ -306,6 +326,11 @@ class Assistant:
             self._set_state(State.DICTATING, "terminal" if self._dictation_enter else "")
         elif reply.control == "dictate_stop":
             self._set_state(State.IDLE)
+        elif reply.control == "wake_reload":
+            self._reload_wake()
+            self._set_state(State.IDLE)
+        elif reply.control == "language":
+            self._set_state(State.IDLE)
 
     def _after_reply(self, reply: Reply) -> None:
         window = self.cfg.assistant.follow_up_window_s
@@ -327,12 +352,19 @@ class Assistant:
         pending = self._pending
         if answer is True and pending is not None:
             self._pending = None
+            self._suggestion_key = None
             self._set_state(State.IDLE)
             return self._execute(pending)
         if answer is False:
             self._pending = None
             self._set_state(State.IDLE)
-            reply = Reply(self.p.get("cancelled"))
+            if self._suggestion_key:
+                key, self._suggestion_key = self._suggestion_key, None
+                if getattr(self.router, "prefs", None) is not None:
+                    self.router.prefs.dismiss(key)
+                reply = Reply(self.p.get("suggestion_declined"))
+            else:
+                reply = Reply(self.p.get("cancelled"))
             self.speak(reply.text)
             return reply
         # réponse incompréhensible : on redemande une fois, puis on annule au délai
@@ -458,12 +490,196 @@ class Assistant:
             self._set_state(State.IDLE)
         elif self.state == State.CONFIRMING and now > self._deadline:
             self._pending = None
+            self._suggestion_key = (
+                None  # une suggestion sans réponse sera reproposée après le délai
+            )
             self._set_state(State.IDLE)
             self.speak(self.p.get("confirm_timeout"))
         elif self.state == State.PAUSED and now > self._deadline:
             self._set_state(State.IDLE)
         self._announce_tasks()
         self._maybe_snapshot()
+        self._apply_quiet_hours()
+        self._check_automations()
+        self._maybe_suggest_routine()
+
+    # ================================================================== phase 4 : proactivité
+    def quiet_now(self) -> bool:
+        spec = (self.cfg.assistant.quiet_hours or "").strip()
+        if not spec or "-" not in spec:
+            return False
+        try:
+            start_s, end_s = spec.split("-", 1)
+            sh, sm = (int(x) for x in start_s.strip().split(":"))
+            eh, em = (int(x) for x in end_s.strip().split(":"))
+        except ValueError:
+            return False
+        now = time.localtime()
+        minutes = now.tm_hour * 60 + now.tm_min
+        start, end = sh * 60 + sm, eh * 60 + em
+        return start <= minutes < end if start <= end else minutes >= start or minutes < end
+
+    def _apply_quiet_hours(self) -> None:
+        quiet = self.quiet_now()
+        if quiet and not self._quiet_active:
+            self._quiet_active = True
+            self._base_verbosity = self.p.verbosity
+            self.p.verbosity = "concise"
+        elif not quiet and self._quiet_active:
+            self._quiet_active = False
+            self.p.verbosity = self._base_verbosity
+
+    def _suggestions_allowed(self) -> bool:
+        return (
+            self.cfg.habits.enabled
+            and getattr(self.router, "habits", None) is not None
+            and getattr(self.router, "prefs", None) is not None
+            and not self.quiet_now()
+        )
+
+    def _maybe_follow_up(self, intent: Intent, reply: Reply) -> bool:
+        """Après une action : « Veux-tu aussi … ? » si elle est presque toujours suivie d'une autre."""
+        if not (self._suggestions_allowed() and self.cfg.habits.suggest_follow_ups and reply.ok):
+            return False
+        if intent.text.startswith(("automation:", "suggestion", "routine")):
+            return False
+        try:
+            follow = self.router.habits.follow_up_for(intent.name, intent.slots)
+        except Exception as exc:  # noqa: BLE001
+            log.debug("habitudes indisponibles : %s", exc)
+            return False
+        if follow is None:
+            return False
+        key = f"follow:{follow.after}>{follow.key}"
+        prefs = self.router.prefs
+        if prefs.is_dismissed(key) or not prefs.cooldown_ok(key, self.cfg.habits.cooldown_hours):
+            return False
+        scheduler = getattr(self.router, "scheduler", None)
+        if scheduler is not None and scheduler.exists(follow.intent, follow.slots):
+            return False
+        from iris.core.habits import describe
+
+        prefs.touch(key)
+        self._pending = Intent(
+            follow.intent,
+            dict(follow.slots),
+            text="suggestion",
+            requires_confirmation=follow.intent in _CONFIRM,
+        )
+        self._suggestion_key = key
+        self._set_state(State.CONFIRMING, "suggestion")
+        self._deadline = self.clock() + self.cfg.assistant.confirm_timeout_s
+        self.speak(
+            self.p.get(
+                "follow_up_question", action=describe(follow.intent, follow.slots, self.p.lang)
+            )
+        )
+        return True
+
+    def _maybe_suggest_routine(self) -> None:
+        """Dans un moment calme : « Tu fais souvent X vers 9 h, je m'en occupe automatiquement ? »"""
+        if (
+            self.state != State.IDLE
+            or not self._suggestions_allowed()
+            or not self.cfg.habits.suggest_routines
+        ):
+            return
+        if self.clock() - self._last_routine_check < 600:
+            return
+        self._last_routine_check = self.clock()
+        prefs = self.router.prefs
+        if not prefs.cooldown_ok("routine", self.cfg.habits.cooldown_hours):
+            return
+        try:
+            routine = self.router.habits.routine_due()
+        except Exception as exc:  # noqa: BLE001
+            log.debug("routines indisponibles : %s", exc)
+            return
+        if routine is None:
+            return
+        key = f"routine:{routine.key}@{routine.hour}:{routine.minute:02d}"
+        if prefs.is_dismissed(key) or routine.intent in _CONFIRM:
+            return
+        scheduler = getattr(self.router, "scheduler", None)
+        if scheduler is None or scheduler.exists(routine.intent, routine.slots):
+            return
+        from iris.core.habits import describe
+        from iris.core.scheduler import Schedule
+
+        days = (0, 1, 2, 3, 4) if routine.weekdays_only else ()
+        schedule = Schedule("weekly" if days else "daily", routine.hour, routine.minute, days)
+        prefs.touch("routine")
+        prefs.touch(key)
+        self._pending = Intent(
+            "automation_add",
+            {
+                "intent": routine.intent,
+                "slots": routine.slots,
+                "hour": routine.hour,
+                "minute": routine.minute,
+                "days": list(days),
+            },
+            text="routine",
+        )
+        self._suggestion_key = key
+        self._set_state(State.CONFIRMING, "routine")
+        self._deadline = self.clock() + self.cfg.assistant.confirm_timeout_s * 2
+        t = f"{routine.hour} h {routine.minute:02d}" if routine.minute else f"{routine.hour} h"
+        self.speak(
+            self.p.get(
+                "routine_question",
+                action=describe(routine.intent, routine.slots, self.p.lang),
+                time=t,
+                schedule=schedule.describe(self.p.lang),
+            )
+        )
+
+    def _check_automations(self) -> None:
+        scheduler = getattr(self.router, "scheduler", None)
+        if (
+            scheduler is None
+            or not self.cfg.automations.enabled
+            or self.state not in (State.IDLE, State.ACTIVE)
+        ):
+            return
+        if self.clock() - self._last_auto_check < max(5, self.cfg.automations.check_interval_s):
+            return
+        self._last_auto_check = self.clock()
+        try:
+            due = scheduler.due()
+        except Exception as exc:  # noqa: BLE001
+            log.debug("automatisations indisponibles : %s", exc)
+            return
+        for auto in due:
+            log.info("Automatisation : %s (%s)", auto.name, auto.intent)
+            reply = self.router.run_automation(auto)
+            scheduler.mark_run(auto)
+            prefix = (
+                ""
+                if auto.intent == "reminder_fire" or not self.cfg.automations.announce
+                else self.p.get("automation_running")
+            )
+            if not reply.ok:
+                log.warning("Automatisation %s : %s", auto.name, reply.text)
+            if reply.text:
+                self.speak(prefix + reply.text)
+            if reply.data.get("notify") and self.cfg.system.notify:
+                notify.send(
+                    self.cfg.assistant.name,
+                    reply.text,
+                    urgency="critical" if reply.data.get("urgent") else "normal",
+                )
+            self.on_event("automation", auto.name)
+
+    def _reload_wake(self) -> None:
+        if self.wake is None:
+            return
+        try:
+            from iris.wakeword.transcript import TranscriptWake
+
+            self.wake = TranscriptWake(self.cfg.wake.phrases, self.cfg.wake.fuzzy_threshold)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("mots d'activation non rechargés : %s", exc)
 
     # ================================================================== tâches en arrière-plan
     def _announce_tasks(self) -> None:

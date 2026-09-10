@@ -2,20 +2,23 @@
 
 Fichier : `~/.config/iris/config.toml` (`iris config path`). Créé avec toutes les clés commentées par `iris config init` ; toute clé absente prend la valeur par défaut embarquée (`iris/data/config.default.toml`). `iris config show` affiche la configuration effective. Après modification : `systemctl --user restart iris`.
 
+Les préférences dites à la voix (« sois plus directe », « parle plus vite », « appelle-toi Nova », alias appris…) sont mémorisées dans le journal et **appliquées par-dessus ce fichier** au démarrage : `iris prefs` les affiche, `iris prefs reset` les efface. Voir [PERSONALIZATION.md](PERSONALIZATION.md).
+
 ## `[assistant]`
 
 | Clé | Défaut | Rôle |
 |---|---|---|
 | `name` | `"Iris"` | Nom (notifications). |
 | `language` | `"fr"` | Langue des réponses et de la transcription (`fr` / `en` / `auto` : répond dans la langue détectée). |
-| `personality` | `""` | Profil libre transmis au LLM (« Tutoie-moi, sois directe… »). |
+| `personality` | `""` | Profil libre transmis au LLM et aux instructions de la voix OpenAI (« Tutoie-moi, sois directe… »). |
 | `verbosity` | `"normal"` | `concise` · `normal` · `chatty` (ajoute « Autre chose ? »). |
-| `tone` | `"warm"` | `warm` · `direct` · `coach`. |
+| `tone` | `"warm"` | `warm` · `direct` · `coach` · `playful` · `pro` · `zen` (« sois plus directe / taquine / zen… » le change à la voix). |
 | `active_window_s` | `8.0` | Après « Hey Iris » seul, secondes d'attente d'une commande. |
 | `follow_up_window_s` | `5.0` | Après une commande, secondes pour enchaîner sans mot d'activation (`0` pour désactiver). |
 | `confirm_timeout_s` | `12.0` | Délai de réponse à une demande de confirmation. |
 | `ack_sound` | `true` | Bip d'activation (sinon « Oui ? » parlé). |
 | `resume_prompt` | `false` | Au démarrage, proposer de reprendre la session précédente (voir `[memory]`). |
+| `quiet_hours` | `""` | Heures calmes, ex. `"22:00-07:00"` (peut traverser minuit) : réponses `concise` et aucune suggestion proactive ; les automatisations et rappels continuent. |
 
 ## `[wake]`
 
@@ -134,6 +137,39 @@ Fichier : `~/.config/iris/config.toml` (`iris config path`). Créé avec toutes 
 | `resume_min_age_min` | `60` | Âge minimal de l'instantané pour proposer une reprise. |
 | `max_facts` | `200` | Nombre de faits conservés. |
 
+## `[habits]`
+
+| Clé | Défaut | Rôle |
+|---|---|---|
+| `enabled` | `true` | Analyse des habitudes et suggestions (« arrête de me proposer des suggestions » le met à `false`, mémorisé). |
+| `suggest_follow_ups` | `true` | « Veux-tu aussi … ? » après une action presque toujours suivie d'une autre. |
+| `suggest_routines` | `true` | « Tu fais souvent … vers 9 h, je m'en occupe ? » dans un moment calme. |
+| `window_days` | `14` | Période du journal analysée. |
+| `min_occurrences` | `3` | Jours distincts (routines) ou occurrences (enchaînements) avant de suggérer. |
+| `cooldown_hours` | `24` | Délai minimal entre deux suggestions du même type ; un « non » est définitif. |
+
+Nécessite `privacy.journal_actions = true`. Détails : [PERSONALIZATION.md](PERSONALIZATION.md#habitudes-et-suggestions).
+
+## `[automations]`
+
+| Clé | Défaut | Rôle |
+|---|---|---|
+| `enabled` | `true` | « chaque matin à 9 h, lance … », « rappelle-moi de … à 15 h » ; `false` désactive la création et l'exécution (les entrées sont conservées). |
+| `check_interval_s` | `30` | Fréquence de vérification des échéances par la boucle vocale. |
+| `announce` | `true` | Préfixe « Comme prévu : … » à l'exécution (les rappels sont toujours annoncés). |
+
+Les automatisations sont stockées dans le journal (table `automations`), gérées à la voix ou par `iris automations`. Détails : [AUTOMATIONS.md](AUTOMATIONS.md).
+
+## `[phrases]`
+
+Remplace n'importe quelle réplique d'Iris : `clé = "texte"` ou `clé = ["variante 1", "variante 2"]` (tirage au sort). Clés dans `iris/core/phrasebook.py` (`ack`, `greet`, `thanks_reply`, `done`, `not_understood`, `cancelled`, `confirm_timeout`, `follow_up`, `remembered`, `app_opened`, `automation_created`…) ; les `{variables}` de la phrase d'origine restent utilisables. Une clé surchargée ignore le ton et la verbosité.
+
+```toml
+[phrases]
+ack = ["Oui chef ?", "Je t'écoute."]
+greet = "Salut toi ! On fait quoi ?"
+```
+
 ## `[agents]`
 
 | Clé | Défaut | Rôle |
@@ -191,7 +227,7 @@ apps = [
 
 ## `[apps]`
 
-Alias parlés supplémentaires : `"nom prononcé" = "commande"` ou `"webapp:URL"`. Priorité sur les alias embarqués (`iris/data/apps.toml`). Les variables d'environnement sont développées (`"$TERMINAL -e btop"`).
+Alias parlés supplémentaires : `"nom prononcé" = "commande"` ou `"webapp:URL"`. Priorité sur les alias embarqués (`iris/data/apps.toml`). Les variables d'environnement sont développées (`"$TERMINAL -e btop"`). Les alias appris à la voix (« quand je dis mes mails, ouvre Thunderbird ») s'ajoutent ici au démarrage et l'emportent en cas de doublon.
 
 ## `[[commands]]`
 

@@ -50,6 +50,113 @@ class Rule:
 
 # L'ordre compte : les règles spécifiques précèdent les génériques (open_app / close_app).
 RULES: list[Rule] = [
+    # --- phase 4 : automatisations, rappels, alias, style, voix (en tête : elles contiennent d'autres phrases)
+    Rule(
+        "automation_list",
+        [
+            r"(?:quelles sont mes (?:automatisations|routines|programmations)|liste (?:mes |les |des )?(?:automatisations|rappels|programmations|routines)|"
+            r"^mes (?:automatisations|rappels|routines)$|what are my (?:automations|reminders|routines)|list (?:my )?(?:automations|reminders))",
+        ],
+    ),
+    Rule(
+        "automation_delete",
+        [
+            r"^(?:supprime|efface|annule|retire|enleve|delete|remove|cancel)\s+(?:l'|la |le |les |mon |ma |mes |the |my )?"
+            r"(?:automatisation|automation|rappel|reminder|programmation|routine)s?(?:\s+(?:de |du |d'|of |at |pour |for )?(?P<name>.+))?$",
+        ],
+    ),
+    Rule(
+        "reminder_create",
+        [
+            r"^(?:rappelle moi|remind me)\b(?P<rest>.*)$",
+            r"^(?:dans \d+ ?(?:minutes?|min|heures?|h)|in \d+ ?(?:minutes?|min|hours?|h)|a \d{1,2}(?: ?h(?:eures?)?| ?\d{2})?(?: ?\d{2})?|"
+            r"at \d{1,2}(?: ?\d{2})?(?: ?[ap]m)?|demain[^,]*|tomorrow[^,]*|ce soir[^,]*|tonight[^,]*)[,]?\s+(?:rappelle moi|remind me)\b(?P<rest2>.*)$",
+        ],
+    ),
+    Rule(
+        "automation_create",
+        [
+            r"\b(?:chaque|tous les|toutes les|every)\s+(?:matins?|soirs?|jours?|nuits?|midis?|days?|mornings?|evenings?|nights?|"
+            r"weekdays?|weekends?|week ends?|jours? de (?:la )?semaine|jours? ouvres|lundis?|mardis?|mercredis?|jeudis?|vendredis?|"
+            r"samedis?|dimanches?|mondays?|tuesdays?|wednesdays?|thursdays?|fridays?|saturdays?|sundays?)\b|"
+            r"\b(?:en semaine|le week end|les week ends|on weekdays|on weekends)\b",
+        ],
+    ),
+    Rule(
+        "alias_learn",
+        [
+            r"^(?:quand je dis|lorsque je dis|when i say)\s+(?P<phrase>.+?)\s*,?\s+(?:c'est|ca veut dire|ca signifie|je veux dire|"
+            r"je parle de|ouvre|lance|i mean|it means|that means|open|launch)\s+(?P<target>.+)$",
+        ],
+    ),
+    Rule(
+        "alias_list",
+        [
+            r"(?:quels sont mes alias|^mes alias$|liste (?:mes |des |les )?alias|what are my aliases|^my aliases$|list (?:my )?aliases)",
+        ],
+    ),
+    Rule(
+        "suggestions_off",
+        [
+            r"(?:arrete de (?:me )?(?:proposer|suggerer)|ne (?:me )?propose plus|plus de suggestions?|stop (?:suggesting|the suggestions)|no more suggestions)",
+        ],
+    ),
+    Rule(
+        "suggestions_on",
+        [
+            r"(?:propose moi a nouveau|reprends les suggestions|reactive les suggestions|resume (?:the )?suggestions|suggest again)",
+        ],
+    ),
+    Rule(
+        "habits_show",
+        [
+            r"(?:quelles sont mes habitudes|^mes habitudes$|^mes routines$|what are my habits|^my habits$)"
+        ],
+    ),
+    Rule(
+        "voice_speed",
+        [
+            r"^(?:parle|speak|talk)\s+(?:un peu |beaucoup |a bit |much )?(?P<dir>plus vite|plus rapidement|faster|quicker|plus lentement|moins vite|slower|more slowly)$",
+            r"^(?:vitesse normale|parle normalement|parle a vitesse normale|normal speed|speak normally)$",
+        ],
+    ),
+    Rule(
+        "voice_change",
+        [
+            r"^(?:change de voix|prends une autre voix|autre voix|change (?:your |the )?voice|use another voice|next voice)$",
+            r"^(?:utilise|prends|mets|use|switch to)\s+(?:la |the )?voix\s+(?:de |d')?(?P<voice>.+)$",
+            r"^(?:use|switch to)\s+(?:the )?(?P<voice2>.+?)\s+voice$",
+        ],
+    ),
+    Rule(
+        "style_verbosity",
+        [
+            r"(?P<concise>sois (?:plus )?(?:concise|breve|courte)|reponses? (?:plus )?courtes?|parle moins|moins de blabla|be (?:more )?concise|shorter answers|talk less|be brief)|"
+            r"(?P<chatty>sois (?:plus )?bavarde|parle plus|developpe (?:plus|davantage)|be (?:more )?chatty|talk more|longer answers)|"
+            r"(?P<normal>reponses? normales?|verbosite normale|normal answers)",
+        ],
+    ),
+    Rule(
+        "style_tone",
+        [
+            r"^(?:sois|be|deviens|become)\s+(?:un peu |plus |more |less |moins |tres |very |really )?(?P<tone>direct|directe|franche|franc|cash|"
+            r"chaleureuse|chaleureux|douce|doux|gentille|warm|friendly|coach|motivante|motivant|energique|energetic|motivating|joueuse|joueur|"
+            r"taquine|taquin|drole|playful|funny|fun|pro|professionnelle|professionnel|serieuse|serieux|professional|serious|formelle|formal|"
+            r"zen|calme|posee|pose|calm|relaxed)$",
+        ],
+    ),
+    Rule(
+        "language_switch",
+        [
+            r"^(?:parle|reponds|reponds moi|speak|answer|talk|reply)\s+(?:en |in )?(?P<lang>francais|anglais|french|english)$",
+        ],
+    ),
+    Rule(
+        "wake_add",
+        [
+            r"^(?:appelle toi|tu t'appelles|reponds aussi a|reponds au nom de|call yourself|answer to|your name is|also answer to)\s+(?P<name>[\w' -]{2,30})$",
+        ],
+    ),
     Rule(
         "stop",
         [
@@ -634,7 +741,19 @@ def parse_yes_no(text: str) -> bool | None:
 
 CONFIRM_INTENTS = {r.name for r in RULES if r.confirm}
 # Slots dont on veut le texte d'origine (accents, majuscules) plutôt que la forme canonique.
-FREE_TEXT_SLOTS = ("text", "fact", "prompt", "query")
+FREE_TEXT_SLOTS = (
+    "text",
+    "fact",
+    "prompt",
+    "query",
+    "phrase",
+    "target",
+    "rest",
+    "rest2",
+    "voice",
+    "voice2",
+    "name",
+)
 _EDGE = re.compile(r"^[\s,;:!?.…\"'«»()-]+|[\s,;:!?.…\"'«»()-]+$")
 
 
