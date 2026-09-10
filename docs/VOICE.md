@@ -1,83 +1,104 @@
 # Voix IA
 
-Iris dispose de quatre backends de synthèse. `tts.backend = "auto"` prend le premier disponible dans l'ordre Kokoro → Piper → espeak-ng → console.
+Iris parle avec une voix neuronale expressive. `tts.backend = "auto"` prend la meilleure voix disponible selon tes clés :
+**ElevenLabs** (si `ELEVENLABS_API_KEY` et `privacy.allow_cloud = true`) → **OpenAI** → **Cartesia** → Kokoro (local, si installé) → Piper → espeak-ng → console.
 
-## Kokoro (local, défaut)
+Toutes les voix cloud bénéficient :
+- du **cache disque** (`~/.cache/iris/tts`, `tts.cache = true`, 200 Mo max) : « Oui ? », « Workspace 2. », « Volume à 50 pour cent. » ne sont synthétisés qu'une fois ;
+- de la lecture **phrase par phrase** (la phrase N est jouée pendant que N+1 se synthétise).
 
-[Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) est un modèle neuronal open-source (Apache 2.0) au rendu très naturel, exécuté en local via `kokoro-onnx` (ONNX Runtime, CPU, 24 kHz). Aucune donnée ne sort de la machine.
+## ElevenLabs (recommandé)
+
+La référence en naturel et en expressivité, avec des voix françaises natives dans la bibliothèque communautaire.
 
 ```bash
-uv pip install --python ~/.local/share/iris/venv/bin/python kokoro-onnx   # ou extra [voice]
-iris voices download kokoro                       # kokoro-v1.0.onnx (fp32, 325 Mo) + voices-v1.0.bin (28 Mo)
-iris voices download kokoro --model kokoro-v1.0.int8.onnx   # variante légère (114 Mo)
-iris voices list --engine kokoro
-iris say "Bonjour, je suis Iris."
+# 1. clé : https://elevenlabs.io → Profile → API keys
+echo 'ELEVENLABS_API_KEY=sk_…' >> ~/.config/environment.d/iris.conf
+systemctl --user import-environment ELEVENLABS_API_KEY
+
+# 2. choisir une voix
+iris voices list --engine elevenlabs              # voix de ton compte (prédéfinies + ajoutées)
+iris voices library --lang fr                     # voix françaises natives de la bibliothèque
+iris voices library --lang fr --gender female --search chaleureuse --preview 2   # écouter la 2e
+iris voices add <owner> <voice_id> --name "Léa"   # l'ajouter à ton compte
+
+# 3. essayer sans toucher à la config
+iris say --backend elevenlabs --voice "Léa" "Bonjour, je suis Iris. Workspace de dev lancé, veux-tu que je lance aussi les agents ?"
 ```
 
 ```toml
 [tts]
-backend = "kokoro"
-kokoro_model = "kokoro-v1.0.onnx"
-kokoro_voice = ""        # vide = ff_siwis (fr) / af_heart (en)
-kokoro_speed = 1.0       # 1.05-1.1 pour un débit plus vif
-kokoro_lang = ""         # vide = suit la langue ; "fr-fr", "en-us", "en-gb"
-```
+backend = "elevenlabs"                  # ou "auto"
+elevenlabs_voice = "Léa"                # nom (résolu via /v1/voices) ou identifiant
+elevenlabs_model = "eleven_multilingual_v2"
+elevenlabs_stability = 0.45             # ↓ plus expressif, ↑ plus régulier
+elevenlabs_similarity = 0.8
+elevenlabs_style = 0.15                 # exagération du style (multilingual_v2 / flash)
+elevenlabs_speed = 1.0                  # 0.7 → 1.2
+elevenlabs_speaker_boost = true
 
-Voix : français `ff_siwis` (la seule voix française de v1.0) ; anglais `af_heart` (recommandée), `af_bella`, `af_nicole`, `am_michael`, `am_fenrir`, `bf_emma`, `bm_george`… (54 voix). Le modèle reste chargé en mémoire après le premier appel (~1 s de chargement).
-
-Performance mesurée : sur un vCPU Xeon bridé (4 cœurs, conteneur), modèle int8, facteur temps réel ≈ 2,7 (7,9 s d'audio en 19 s à froid, 5,7 s en 15 s à chaud). Sur un CPU de bureau ou de portable récent, Kokoro est généralement plus rapide que le temps réel (RTF 0,2-0,5). La lecture en pipeline (phrase N jouée pendant que N+1 se synthétise) masque une bonne partie de la latence. Si c'est trop lent : `kokoro-v1.0.int8.onnx`, `verbosity = "concise"`, ou un serveur Kokoro-FastAPI sur GPU (ci-dessous).
-
-Échantillon généré pendant le développement : `Bonjour ! Je suis Iris, l'assistante vocale d'Omarchy…` (voix `ff_siwis`, int8).
-
-## OpenAI-compatible `/audio/speech`
-
-Un seul backend pour :
-
-- **OpenAI** `gpt-4o-mini-tts` : voix expressives et **pilotables par instructions** ; Iris dérive l'instruction du ton (`warm` : « voix chaleureuse, naturelle et posée, léger sourire » ; `direct` ; `coach`) ou utilise `tts.openai_instructions`. Voix : `alloy, ash, ballad, coral, echo, fable, nova, onyx, sage, shimmer, verse, marin, cedar`.
-- **Serveurs locaux** exposant la même API : [Kokoro-FastAPI](https://github.com/remsky/Kokoro-FastAPI) (`http://localhost:8880/v1`, GPU), [Speaches](https://github.com/speaches-ai/speaches), LM Studio… Aucune clé nécessaire pour une URL `localhost`, et `privacy.allow_cloud` n'est pas requis.
-
-```toml
-[tts]
-backend = "openai"
-openai_base_url = "https://api.openai.com/v1"    # ou http://localhost:8880/v1
-openai_model = "gpt-4o-mini-tts"                 # Kokoro-FastAPI : "kokoro"
-openai_voice = "coral"                           # Kokoro-FastAPI : "ff_siwis"
-openai_instructions = ""                         # ex. "Voix douce et complice, rythme calme."
-openai_speed = 1.0
-openai_api_key_env = "OPENAI_API_KEY"
-
-[privacy]
-allow_cloud = true                               # pour api.openai.com
-```
-
-Le flux est demandé en PCM 24 kHz (`response_format = "pcm"`) ; si le serveur ne le supporte pas, Iris redemande en WAV.
-
-## ElevenLabs
-
-```toml
-[tts]
-backend = "elevenlabs"
-elevenlabs_voice_id = "…"                        # ID de la voix (console ElevenLabs)
-elevenlabs_model = "eleven_multilingual_v2"      # ou eleven_v3 / eleven_flash_v2_5
 [privacy]
 allow_cloud = true
 ```
 
-Clé : `ELEVENLABS_API_KEY`. Sortie PCM 22,05 kHz. Nécessite l'extra `cloud` (`requests`).
+| Modèle | Pour | Notes |
+|---|---|---|
+| `eleven_multilingual_v2` | qualité de référence, français natif | défaut ; `language_code` non supporté (la langue est déduite du texte) |
+| `eleven_flash_v2_5` | latence minimale (~75 ms), moitié prix | envoie `language_code = fr` pour verrouiller la langue |
+| `eleven_turbo_v2_5` | compromis qualité / latence | |
+| `eleven_v3` | le plus expressif | balises dans le texte des réponses (`[laughs]`, `[whispers]`, `[excited]`) ; `stability` arrondie à 0.0 / 0.5 / 1.0 ; `style` ignoré |
+
+Iris transmet `previous_text` entre les phrases d'une même réponse pour une prosodie continue, demande du PCM 24 kHz (`elevenlabs_output_format`, `pcm_44100` selon le plan), et gère les erreurs de clé/quota par une réponse parlée de repli (console ou Piper), jamais un plantage.
+
+Coût : la facturation est au caractère. Un usage assistant (≈ 50 réponses courtes par jour, ≈ 2 000 caractères) représente ≈ 60 000 caractères par mois **avant cache** ; avec le cache, une fraction. Le plan Starter (30 000 caractères) peut suffire, Creator (100 000) est confortable ; `eleven_flash_v2_5` compte moitié.
+
+## OpenAI `gpt-4o-mini-tts`
+
+Voix pilotables par **instructions** (Iris les dérive du ton : chaleureuse / directe / coach, ou `tts.openai_instructions`). Voix : `alloy, ash, ballad, coral, echo, fable, nova, onyx, sage, shimmer, verse, marin, cedar`. Le même backend pilote un serveur local compatible (Kokoro-FastAPI, Speaches : `openai_base_url = "http://localhost:8880/v1"`, sans clé ni `allow_cloud`).
+
+```toml
+[tts]
+backend = "openai"
+openai_voice = "coral"
+openai_instructions = "Voix chaleureuse et posée, léger sourire, rythme naturel."
+```
+
+## Cartesia Sonic
+
+Latence très faible et **émotions** contrôlables (`sonic-3`) : `content`, `calm`, `enthusiastic`, `curious`, `apologetic`…
+
+```bash
+# clé : https://play.cartesia.ai → API keys → CARTESIA_API_KEY
+iris voices list --engine cartesia --lang fr
+iris say --backend cartesia --voice <id> "Bonjour, je suis Iris."
+```
+
+```toml
+[tts]
+backend = "cartesia"
+cartesia_voice = "<identifiant>"
+cartesia_model = "sonic-3"
+cartesia_emotion = "content"
+cartesia_speed = 1.0
+```
+
+## Kokoro (local, facultatif)
+
+Voix neuronale locale (Apache 2.0, 24 kHz). Testée : fonctionnelle en français (`ff_siwis`) mais jugée trop synthétique pour Iris ; elle reste disponible pour un usage 100 % hors-ligne. `iris voices download kokoro` (325 Mo, `--model kokoro-v1.0.int8.onnx` : 114 Mo). Sur un CPU lent elle peut être plus lente que le temps réel.
 
 ## Piper (secours)
 
-Voix locale rapide mais synthétique : `iris voices download fr_FR-siwis-medium`. Utilisée automatiquement si Kokoro n'est pas installé.
+Voix locale rapide mais synthétique, utilisée automatiquement si rien d'autre n'est disponible : `iris voices download fr_FR-siwis-medium`.
 
-## Comparer
+## Comparer et dépanner
 
 ```bash
-iris say --backend kokoro "Workspace de dev lancé. Veux-tu que je lance aussi les agents ?"
-iris say --backend openai "Workspace de dev lancé. Veux-tu que je lance aussi les agents ?"
-iris say --backend piper  "Workspace de dev lancé. Veux-tu que je lance aussi les agents ?"
-iris say --lang en "Hello, I'm Iris."
+iris say --backend elevenlabs "Workspace de dev lancé. Veux-tu que je lance aussi les agents ?"
+iris say --backend openai     "…"
+iris say --backend cartesia   "…"
+iris say --backend piper      "…"
+iris voices cache             # taille du cache ; --clear pour le vider (après un changement de voix, inutile : la clé inclut la voix)
+iris doctor                   # « voix (ordre auto) » montre ce qui sera utilisé
 ```
 
-## Pistes (roadmap)
-
-Kyutai TTS (français natif, streaming, GPU), Chatterbox multilingue (émotion contrôlable), Orpheus, XTTS ; voix « émotionnelle » selon le contexte (erreur, succès, matin) ; cache des réponses fréquentes.
+`journalctl --user -u iris` affiche la voix choisie au démarrage (« Voix : elevenlabs ») et les erreurs (clé refusée, quota).

@@ -10,14 +10,14 @@
 [![Python](https://img.shields.io/badge/python-3.11%2B-3776ab)](pyproject.toml)
 [![Licence](https://img.shields.io/badge/licence-MIT-green)](LICENSE)
 [![Local](https://img.shields.io/badge/donn%C3%A9es-locales%20par%20d%C3%A9faut-0ea5e9)](docs/PRIVACY.md)
-[![Voix](https://img.shields.io/badge/voix-Kokoro%20%C2%B7%20OpenAI%20%C2%B7%20ElevenLabs-f472b6)](docs/VOICE.md)
+[![Voix](https://img.shields.io/badge/voix-ElevenLabs%20%C2%B7%20OpenAI%20%C2%B7%20Cartesia-f472b6)](docs/VOICE.md)
 [![LLM](https://img.shields.io/badge/cerveau-OpenCode%20Zen%20%2F%20Go-f59e0b)](docs/LLM.md)
 
 </div>
 
-Iris est un assistant vocal conçu pour [Omarchy](https://omarchy.org) (Arch Linux + Hyprland). Elle se lance avec ta session, écoute en arrière-plan le mot d'activation **« Hey Iris »**, comprend ce que tu dis en français ou en anglais, agit sur le système (applications, workspaces et écrans Hyprland, volume, luminosité, thèmes Omarchy, musique, Bluetooth, Wi-Fi, notifications, dictée…) et te répond avec une **vraie voix IA** (Kokoro en local, ou OpenAI / ElevenLabs). Quand une phrase sort de ses règles, un **cerveau LLM** (OpenCode Zen ou OpenCode Go, ou n'importe quel endpoint OpenAI-compatible) décide de l'action à faire ou répond à ta question. Par défaut tout tourne **en local** ; le cloud est un choix explicite.
+Iris est un assistant vocal conçu pour [Omarchy](https://omarchy.org) (Arch Linux + Hyprland). Elle se lance avec ta session, écoute en arrière-plan le mot d'activation **« Hey Iris »**, comprend ce que tu dis en français ou en anglais, agit sur le système (applications, workspaces et écrans Hyprland, volume, luminosité, thèmes Omarchy, musique, Bluetooth, Wi-Fi, notifications, dictée…) et te répond avec une **vraie voix IA** (ElevenLabs par défaut, OpenAI ou Cartesia au choix, Kokoro en local si tu veux rester hors-ligne). Quand une phrase sort de ses règles, un **cerveau LLM** (OpenCode Zen ou OpenCode Go, ou n'importe quel endpoint OpenAI-compatible) décide de l'action à faire ou répond à ta question. Par défaut tout tourne **en local** ; le cloud est un choix explicite.
 
-> **État du projet — Phase 2 (intégration système) livrée, cerveau LLM branché.** Le cœur est couvert par 260 tests sans matériel. La voix Kokoro a été testée pour de vrai (synthèse française fonctionnelle, [échantillon](docs/VOICE.md)). Le client OpenCode Zen / Go est testé contre des réponses simulées : pas d'appel réel effectué faute de clé. La chaîne micro → Whisper **n'a pas encore été validée sur une machine Omarchy physique** : les premiers retours serviront à calibrer les seuils. Voir [Limitations connues](#limitations-connues).
+> **État du projet — Phase 2 (intégration système) livrée, cerveau LLM branché, voix cloud premium.** Le cœur est couvert par 281 tests sans matériel. Les clients ElevenLabs, Cartesia, OpenAI et OpenCode sont testés contre des réponses simulées (aucune clé disponible pendant le développement) : leurs paramètres viennent des SDK officiels de septembre 2026. Premiers retours de terrain intégrés : la capture micro et le VAD fonctionnent sur Omarchy, et la transcription bascule seule sur CPU quand CUDA manque. Voir [Limitations connues](#limitations-connues).
 
 ---
 
@@ -135,7 +135,7 @@ Le même dialogue fonctionne au clavier avec `iris repl` (pratique pour tester s
    Routeur ── confirmation si critique ──▶ Action (wpctl / hyprctl / uwsm / omarchy-* / wtype / bluetoothctl…)
      │                                          │
      ▼                                          ▼
-   Journal SQLite (traçabilité)            Réponse ──▶ voix IA (Kokoro / OpenAI / ElevenLabs) ──▶ pw-play
+   Journal SQLite (traçabilité)            Réponse ──▶ voix IA (ElevenLabs / OpenAI / Cartesia) ──▶ pw-play
                                                 └──▶ état Waybar ($XDG_RUNTIME_DIR/iris/state.json)
 ```
 
@@ -151,16 +151,21 @@ cd ~/.local/src/irisai
 ./scripts/install.sh
 ```
 
-Le script : installe les paquets système manquants (`pacman`, dont `wtype` pour la dictée), crée un environnement Python isolé (`uv`, Python 3.12) dans `~/.local/share/iris/venv`, installe Iris avec `faster-whisper`, `kokoro-onnx` (voix IA), `piper-tts` (secours) et `sounddevice`, télécharge la voix Kokoro, la voix Piper `fr_FR-siwis-medium` et le modèle Whisper `base`, crée `~/.config/iris/config.toml`, installe et démarre le service systemd, puis lance `iris doctor`.
+Le script : installe les paquets système manquants (`pacman`, dont `wtype` pour la dictée), crée un environnement Python isolé (`uv`, Python 3.12) dans `~/.local/share/iris/venv`, installe Iris avec `faster-whisper`, `piper-tts` (voix de secours) et `sounddevice`, télécharge la voix Piper `fr_FR-siwis-medium` et le modèle Whisper `base`, crée `~/.config/iris/config.toml`, installe et démarre le service systemd, puis lance `iris doctor`.
 
-Options : `--no-service`, `--no-voice`, `--no-pacman`, `--extras=stt,tts,voice,audio,wakeword`. Variables : `IRIS_VOICE`, `IRIS_KOKORO_MODEL` (`kokoro-v1.0.onnx` par défaut, `kokoro-v1.0.int8.onnx` pour un CPU modeste), `IRIS_WHISPER_MODEL`, `IRIS_PYTHON`.
+Options : `--no-service`, `--no-voice`, `--no-pacman`, `--kokoro` (voix locale Kokoro, 325 Mo), `--extras=stt,tts,audio,wakeword`. Variables : `IRIS_VOICE`, `IRIS_WHISPER_MODEL`, `IRIS_PYTHON`, `IRIS_KOKORO_MODEL`.
 
-Pour le cerveau LLM, ajoute ta clé OpenCode (voir [Cerveau LLM](#cerveau-llm-opencode-zen--go)) :
+Puis les clés pour la voix et le cerveau (lues par systemd --user via UWSM) :
 
 ```bash
-echo 'OPENCODE_API_KEY=sk-...' >> ~/.config/environment.d/iris.conf   # lu par systemd --user (UWSM)
-systemctl --user import-environment OPENCODE_API_KEY                    # pour la session en cours
+cat >> ~/.config/environment.d/iris.conf <<'EOF'
+ELEVENLABS_API_KEY=sk_...      # voix (elevenlabs.io → Profile → API keys)
+OPENCODE_API_KEY=sk-...        # cerveau (opencode.ai/auth)
+EOF
+systemctl --user import-environment ELEVENLABS_API_KEY OPENCODE_API_KEY   # session en cours
 ```
+
+et dans `~/.config/iris/config.toml` : `[privacy] allow_cloud = true`, puis `iris voices library --lang fr` pour choisir une voix française native (voir [Voix IA](#voix-ia)).
 
 ### Premier test
 
@@ -180,13 +185,12 @@ uv venv --python 3.12 ~/.local/share/iris/venv
 uv pip install --python ~/.local/share/iris/venv/bin/python "/chemin/vers/irisai[stt,tts,audio]"
 ln -sf ~/.local/share/iris/venv/bin/iris ~/.local/bin/iris
 iris config init
-iris voices download kokoro          # voix IA locale (325 Mo ; --model kokoro-v1.0.int8.onnx : 114 Mo)
-iris voices download fr_FR-siwis-medium   # voix Piper de secours
+iris voices download fr_FR-siwis-medium   # voix Piper de secours (ElevenLabs/OpenAI/Cartesia n'ont rien à télécharger)
 iris models download base            # ou small (meilleur en français, ~2× plus lent)
 iris service install
 ```
 
-Extras disponibles : `stt` (faster-whisper), `voice` (kokoro-onnx), `tts` (piper-tts), `audio` (sounddevice + webrtcvad), `wakeword` (openWakeWord), `cloud` (requests, pour ElevenLabs / fallback Whisper API), `all`. Sans `audio`, Iris capture le micro avec `parec` (livré avec `libpulse`). Sans voix installée, elle se rabat sur `espeak-ng` puis sur l'affichage console.
+Extras disponibles : `stt` (faster-whisper), `tts` (piper-tts), `audio` (sounddevice + webrtcvad), `voice` (kokoro-onnx, local facultatif), `wakeword` (openWakeWord), `cloud` (requests, pour le repli Whisper API), `all`. Les voix ElevenLabs, OpenAI et Cartesia et le LLM n'ont besoin d'aucun paquet supplémentaire. Sans `audio`, Iris capture le micro avec `parec` (livré avec `libpulse`). Sans voix disponible, elle se rabat sur `espeak-ng` puis sur l'affichage console.
 
 ## Utilisation
 
@@ -231,8 +235,9 @@ personality = "Tutoie-moi, sois directe et un peu taquine."   # transmis au LLM
 model = "small"          # base par défaut ; small = nettement mieux en français
 
 [tts]
-backend = "auto"         # kokoro (voix IA locale) → piper → espeak. Ou "openai", "elevenlabs".
-kokoro_speed = 1.05
+backend = "auto"         # elevenlabs (si clé) → openai → cartesia → kokoro → piper
+elevenlabs_voice = "Léa" # nom d'une voix de ton compte (iris voices library --lang fr, iris voices add …)
+elevenlabs_model = "eleven_multilingual_v2"   # ou eleven_flash_v2_5 (latence), eleven_v3 (expressivité)
 
 [llm]
 enabled = true
@@ -262,16 +267,23 @@ wait = true              # attend la fin avant de répondre
 
 ## Voix IA
 
-Piper est une voix de synthèse correcte mais reconnaissable ; Iris parle maintenant avec des voix neuronales expressives. Guide complet : [docs/VOICE.md](docs/VOICE.md).
+Iris parle avec une voix neuronale expressive ; `tts.backend = "auto"` choisit la meilleure disponible selon tes clés. Guide complet (choix d'une voix française native, réglages, coût) : [docs/VOICE.md](docs/VOICE.md).
 
-| Backend | Où | Qualité | Latence | Configuration |
-|---|---|---|---|---|
-| **Kokoro** (défaut) | local, CPU, 24 kHz | naturelle, voix `ff_siwis` en français, 50+ voix anglaises | plus rapide que le temps réel sur un CPU de bureau ; ~2,5× plus lent sur un vCPU bridé | `iris voices download kokoro` |
-| **OpenAI** `gpt-4o-mini-tts` | cloud (ou serveur local compatible : Kokoro-FastAPI, Speaches) | très expressive, **pilotable par instructions** (« voix chaleureuse, léger sourire ») dérivées du ton | ~1 s | `tts.backend = "openai"`, `OPENAI_API_KEY`, `privacy.allow_cloud = true` |
-| **ElevenLabs** | cloud | référence en expressivité | ~1 s | `tts.backend = "elevenlabs"`, `ELEVENLABS_API_KEY`, `tts.elevenlabs_voice_id` |
-| Piper | local | correcte, robotique | instantanée | repli automatique |
+| Backend | Où | Points forts | Configuration |
+|---|---|---|---|
+| **ElevenLabs** (recommandé) | cloud | naturel et expressivité de référence, voix françaises natives dans la bibliothèque, modèles `multilingual_v2` / `flash_v2_5` (latence) / `v3` (balises d'émotion) | `ELEVENLABS_API_KEY`, `elevenlabs_voice = "Nom"`, `allow_cloud = true` |
+| **OpenAI** `gpt-4o-mini-tts` | cloud, ou serveur local compatible | voix **pilotable par instructions** dérivées du ton | `OPENAI_API_KEY`, `tts.backend = "openai"` |
+| **Cartesia** Sonic 3 | cloud | latence très faible, émotions (`content`, `enthusiastic`…) | `CARTESIA_API_KEY`, `cartesia_voice` |
+| Kokoro | local, facultatif | 100 % hors-ligne ; jugée trop synthétique pour être la voix par défaut | `iris voices download kokoro` |
+| Piper | local | secours instantané | automatique |
 
-La lecture est **en pipeline** : la première phrase est jouée pendant que la suivante se synthétise. Un serveur Kokoro-FastAPI sur GPU (`tts.backend = "openai"`, `openai_base_url = "http://localhost:8880/v1"`) donne la qualité Kokoro sans charge CPU.
+```bash
+iris voices library --lang fr --preview 1        # écouter des voix françaises natives (ElevenLabs)
+iris voices add <owner> <voice_id> --name "Léa"  # l'ajouter à ton compte
+iris say --backend elevenlabs --voice "Léa" "Bonjour, je suis Iris."
+```
+
+Les voix cloud passent par un **cache disque** (`~/.cache/iris/tts`) : les réponses récurrentes ne sont synthétisées qu'une fois, ce qui réduit fortement la latence et la consommation de crédits. La lecture est en pipeline phrase par phrase, avec `previous_text` (ElevenLabs) pour une prosodie continue.
 
 ## Cerveau LLM (OpenCode Zen / Go)
 
@@ -308,7 +320,7 @@ Alternative sans systemd : `hypr/iris-autostart.conf` (`exec-once = uwsm app -- 
 - **L'audio du micro n'est jamais écrit sur le disque** : il vit en mémoire le temps de la transcription, puis disparaît.
 - **Le journal des actions** (`~/.local/state/iris/iris.db`) trace *ce qu'Iris a fait* (intention, paramètres, résultat, durée) pour la traçabilité demandée aux assistants qui pilotent un système. Il ne contient pas le texte de tes phrases sauf si `privacy.store_transcripts = true`. `iris journal --clear` l'efface ; `privacy.journal_actions = false` le désactive.
 - Les modèles sont téléchargés une fois (Hugging Face) puis lus hors-ligne.
-- Options cloud, toutes en opt-in explicite (`privacy.allow_cloud = true`) : cerveau LLM OpenCode / OpenAI / OpenRouter (texte des phrases hors règles et questions, plus le contexte listé ci-dessus), voix OpenAI ou ElevenLabs (texte des réponses), API Whisper d'OpenAI (repli STT). Les URL `localhost` (Ollama, Kokoro-FastAPI) restent permises sans ce drapeau. Le pont Claude Code envoie à Claude *uniquement* le texte de la demande « demande à Claude … », via ton abonnement.
+- Options cloud, toutes en opt-in explicite (`privacy.allow_cloud = true`) : cerveau LLM OpenCode / OpenAI / OpenRouter (texte des phrases hors règles et questions, plus le contexte listé ci-dessus), voix ElevenLabs, OpenAI ou Cartesia (texte des réponses), API Whisper d'OpenAI (repli STT). Les URL `localhost` (Ollama, Kokoro-FastAPI) restent permises sans ce drapeau. Le pont Claude Code envoie à Claude *uniquement* le texte de la demande « demande à Claude … », via ton abonnement.
 
 Détails : [docs/PRIVACY.md](docs/PRIVACY.md).
 
@@ -332,7 +344,7 @@ iris/
 │                     découpage multi-commandes        │   ├── power.py, web.py, notify.py
 ├── agents/           pont Claude Code (expérimental) │   └── omarchy.py     thèmes, lock, screenshot, webapps
 └── data/             config par défaut, alias apps
-tests/                260 tests (NLU, wake, routeur, machine à états, LLM, VAD, config, journal, CLI)
+tests/                281 tests (NLU, wake, routeur, machine à états, LLM, voix cloud, VAD, config, journal, CLI)
 scripts/install.sh    installation Omarchy            systemd/iris.service   hypr/   contrib/waybar/
 ```
 
@@ -346,7 +358,7 @@ Détail par phase, avec les tâches : [docs/ROADMAP.md](docs/ROADMAP.md).
   - [ ] Validation sur machine Omarchy réelle et calibration des seuils (à faire avec les premiers retours).
   - [ ] Modèle openWakeWord « hey iris » pré-entraîné fourni dans le dépôt.
 - [x] **Phase 2 — Intégration système** *(cette version, v0.2)* : dictée (`wtype`, mode dictée continue), multi-écrans, Bluetooth / Wi-Fi / mode avion / batterie / sortie audio, notifications mako (lecture, effacement, ne pas déranger), sessions de workspaces, plusieurs commandes par phrase, push-to-talk (`iris trigger` + raccourci Hyprland), état pour Waybar, langue de réponse automatique.
-  - [x] **Voix IA** : Kokoro local (défaut), OpenAI `gpt-4o-mini-tts` et serveurs OpenAI-compatibles, ElevenLabs ; lecture phrase par phrase.
+  - [x] **Voix IA** : ElevenLabs (défaut dès qu'une clé est présente : bibliothèque de voix françaises, réglages d'expressivité, continuité entre phrases), OpenAI `gpt-4o-mini-tts` et serveurs compatibles, Cartesia Sonic, Kokoro local facultatif ; cache disque et lecture phrase par phrase.
   - [x] **Cerveau LLM** (avancé depuis la phase 3) : OpenCode Go / Zen, OpenAI, OpenRouter, Ollama ; repli sur phrase inconnue, questions ouvertes, personnalité, contexte, historique de conversation.
   - [ ] Widget Quickshell (module Waybar livré).
 - [ ] **Phase 3 — Agents + mémoire** : agents en arrière-plan avec surveillance et notification à la fin (« surveille la compilation »), pont Claude Code asynchrone (abonnement claude.ai, pas d'API), mémoire contextuelle persistante (projets ouverts, tâches en cours), proposition de reprise (« reprendre ta session d'hier ? »), transcription voix → prompt dans le terminal actif.
@@ -374,10 +386,10 @@ Détail par phase, avec les tâches : [docs/ROADMAP.md](docs/ROADMAP.md).
 - Pas d'interruption pendant qu'Iris parle (le micro est volontairement ignoré).
 - Deux commandes dans une phrase (« ouvre A et ferme B ») ne sont pas découpées.
 - `piper-tts` sur PyPI ne fournit pas toujours de roue pour la toute dernière version de Python d'Arch : le script utilise Python 3.12 via `uv`. Alternative : paquet AUR `piper-tts-bin` (Iris utilise le binaire `piper` s'il est dans le PATH).
-- Kokoro sur un CPU lent (ou dans une VM bridée) peut être plus lent que le temps réel : prendre le modèle `int8`, raccourcir les réponses (`verbosity = "concise"`), ou passer par un serveur Kokoro-FastAPI / OpenAI.
+- Les voix ElevenLabs, OpenAI et Cartesia dépendent du réseau : sans connexion, Iris retombe sur Piper (ou la console) et le dit dans le journal. Le cache disque couvre les réponses déjà entendues.
+- Kokoro (local) a été jugée trop synthétique ; elle reste disponible pour un usage hors-ligne mais n'est plus installée par défaut.
 - Le LLM et le pont Claude Code sont synchrones : Iris attend la réponse (quelques secondes, jusqu'à `llm.timeout_s`). Le widget affiche « réfléchit » pendant ce temps.
 - Le client OpenCode Zen / Go est validé par des tests à réponses simulées, pas encore par un appel réel (aucune clé disponible pendant le développement). Les endpoints et modèles viennent de la documentation OpenCode de septembre 2026 ; `iris llm models` liste ce que ton compte voit vraiment.
-- Kokoro v1.0 n'a qu'une voix française (`ff_siwis`) ; pour d'autres timbres en français, utiliser OpenAI ou ElevenLabs.
 - Sauvegarder une session capture les classes de fenêtres et tente d'en déduire la commande : les applications lancées par un script exotique peuvent être manquées.
 
 ## Dépannage
@@ -396,14 +408,16 @@ Détail par phase, avec les tâches : [docs/ROADMAP.md](docs/ROADMAP.md).
 | « Je n'ai pas de modèle de langage configuré » | `[llm] enabled = true` + `[privacy] allow_cloud = true` + clé exportée ; `iris llm info` montre ce qui manque. |
 | LLM : « clé API refusée » | Clé Go utilisée avec `provider = "opencode-zen"` (ou l'inverse) : les URL diffèrent (`/zen/go/v1` vs `/zen/v1`). |
 | LLM : « modèle introuvable (404) » | Le modèle n'est pas dans ton plan ; `iris llm models` liste les identifiants disponibles. |
-| Voix Kokoro hachée / lente | `kokoro_model = "kokoro-v1.0.int8.onnx"` ; ou `tts.backend = "openai"` avec un serveur Kokoro-FastAPI local. |
+| ElevenLabs : « clé refusée » / « quota atteint » | `iris doctor` (ligne ElevenLabs) ; vérifie `ELEVENLABS_API_KEY` dans `~/.config/environment.d/iris.conf` et le solde de caractères ; `eleven_flash_v2_5` coûte moitié. |
+| ElevenLabs : « voix introuvable » | Le nom doit être celui d'une voix **de ton compte** (`iris voices list --engine elevenlabs`) ; une voix de la bibliothèque doit d'abord être ajoutée (`iris voices add`). |
+| La voix a un accent en français | Choisis une voix native : `iris voices library --lang fr --preview N`. |
 | Dictée : rien ne s'écrit | `sudo pacman -S wtype` ; sinon le texte est copié (Ctrl+V). Certaines applis XWayland ignorent wtype : `typing_tool = "ydotool"`. |
 
 ## Développement
 
 ```bash
 uv venv .venv && uv pip install --python .venv/bin/python -e ".[dev]"
-.venv/bin/pytest            # 260 tests, ~2 s, aucun matériel requis
+.venv/bin/pytest            # 281 tests, ~2 s, aucun matériel requis
 .venv/bin/ruff check iris tests && .venv/bin/ruff format iris tests
 .venv/bin/iris repl         # tester la compréhension au clavier
 ```

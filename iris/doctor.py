@@ -137,6 +137,34 @@ def run_checks(cfg: Config) -> list[Check]:
     )
 
     # --- voix IA
+    from iris.tts.elevenlabs import has_api_key as eleven_key
+    from iris.tts.factory import auto_order
+
+    checks.append(Check("voix (ordre auto)", True, " → ".join(auto_order(cfg)), level="info"))
+    eleven = eleven_key(cfg.tts)
+    checks.append(
+        Check(
+            "ElevenLabs",
+            eleven and cfg.privacy.allow_cloud,
+            f"voix « {cfg.tts.elevenlabs_voice or cfg.tts.elevenlabs_voice_id} », {cfg.tts.elevenlabs_model}"
+            if eleven
+            else "clé absente",
+            "exporte ELEVENLABS_API_KEY et mets privacy.allow_cloud = true"
+            if not eleven or not cfg.privacy.allow_cloud
+            else "",
+            "warn" if cfg.tts.backend in ("auto", "elevenlabs") else "info",
+        )
+    )
+    if os.environ.get(cfg.tts.cartesia_api_key_env, ""):
+        checks.append(
+            Check(
+                "Cartesia",
+                bool(cfg.tts.cartesia_voice),
+                cfg.tts.cartesia_voice or "cartesia_voice non défini",
+                "iris voices list --engine cartesia --lang fr",
+                "warn",
+            )
+        )
     kokoro_files = voice_files_kokoro(cfg)
     try:
         importlib.import_module("kokoro_onnx")

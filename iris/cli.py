@@ -65,9 +65,38 @@ def _parser() -> argparse.ArgumentParser:
 
     voices = sub.add_parser("voices", help="voix Piper")
     voices_sub = voices.add_subparsers(dest="voices_cmd", required=True)
-    vl = voices_sub.add_parser("list")
-    vl.add_argument("--lang", default=None, help="filtre, ex. fr_FR, en_US")
-    vl.add_argument("--engine", default="piper", choices=("piper", "kokoro"))
+    vl = voices_sub.add_parser("list", help="voix disponibles pour un moteur")
+    vl.add_argument("--lang", default=None, help="filtre : fr, en (Piper : fr_FR, en_US)")
+    vl.add_argument(
+        "--engine",
+        default="elevenlabs",
+        choices=("elevenlabs", "cartesia", "openai", "kokoro", "piper"),
+    )
+    vlib = voices_sub.add_parser(
+        "library", help="bibliothèque communautaire ElevenLabs (voix natives par langue)"
+    )
+    vlib.add_argument("--lang", default="fr")
+    vlib.add_argument("--search", default=None)
+    vlib.add_argument("--gender", default=None, help="female | male")
+    vlib.add_argument("--limit", type=int, default=20)
+    vlib.add_argument("--featured", action="store_true")
+    vlib.add_argument(
+        "--preview",
+        type=int,
+        default=None,
+        metavar="N",
+        help="écouter l'extrait de la N-ième voix listée",
+    )
+    vadd = voices_sub.add_parser(
+        "add", help="ajouter une voix de la bibliothèque ElevenLabs à ton compte"
+    )
+    vadd.add_argument("public_owner_id")
+    vadd.add_argument("voice_id")
+    vadd.add_argument(
+        "--name", required=True, help="nom sous lequel l'utiliser (tts.elevenlabs_voice)"
+    )
+    vcache = voices_sub.add_parser("cache", help="cache des synthèses")
+    vcache.add_argument("--clear", action="store_true")
     vd = voices_sub.add_parser("download", help="voix Piper (nom) ou « kokoro » (voix IA locale)")
     vd.add_argument("voice", nargs="?", default=None)
     vd.add_argument(
@@ -224,6 +253,20 @@ def cmd_say(cfg: Config, args: argparse.Namespace) -> int:
         cfg.tts.backend = args.backend
     if args.lang:
         cfg.assistant.language = args.lang
+    if args.voice:
+        backend = cfg.tts.backend if cfg.tts.backend != "auto" else "elevenlabs"
+        setattr(
+            cfg.tts,
+            {
+                "elevenlabs": "elevenlabs_voice",
+                "openai": "openai_voice",
+                "cartesia": "cartesia_voice",
+                "kokoro": "kokoro_voice",
+                "piper": "piper_voice",
+            }.get(backend, "elevenlabs_voice"),
+            args.voice,
+        )
+        cfg.tts.backend = backend
     tts = build_tts(cfg)
     print(f"[{tts.name}]", file=sys.stderr)
     text = " ".join(args.text)
@@ -293,8 +336,83 @@ def cmd_config(cfg: Config, args: argparse.Namespace) -> int:
 def cmd_voices(cfg: Config, args: argparse.Namespace) -> int:
     from iris.tts import voices
 
+    if args.voices_cmd == "cache":
+        from iris.tts.cache import TTSCache
+
+        cache = TTSCache(max_mb=cfg.tts.cache_max_mb)
+        if args.clear:
+            print(f"{cache.clear()} fichier(s) supprimé(s).")
+        else:
+            print(
+                f"{cache.dir} : {cache.size_bytes() / 1_048_576:.1f} Mo (max {cfg.tts.cache_max_mb} Mo)"
+            )
+        return 0
+
+    if args.voices_cmd == "library":
+        tts = _elevenlabs(cfg)
+        found = tts.library(args.lang, args.search, args.gender, args.limit, args.featured or None)
+        if not found:
+            print("Aucune voix trouvée.")
+            return 1
+        for i, v in enumerate(found, 1):
+            print(f"{i:2d}. {v.summary()}")
+            print(f"     owner={v.public_owner_id}  {v.description[:90]}")
+        print(
+            '\nAjouter : iris voices add <owner> <voice_id> --name "Nom"   puis   tts.elevenlabs_voice = "Nom"'
+        )
+        if args.preview:
+            return _preview(found, args.preview)
+        return 0
+
+    if args.voices_cmd == "add":
+        tts = _elevenlabs(cfg)
+        voice_id = tts.add_from_library(args.public_owner_id, args.voice_id, args.name)
+        print(
+            f'Voix ajoutée : {args.name} ({voice_id}). Dans la config : elevenlabs_voice = "{args.name}"'
+        )
+        return 0
+
     if args.voices_cmd == "list":
-        if args.engine == "kokoro":
+        engine = args.engine
+        if engine == "elevenlabs":
+            tts = _elevenlabs(cfg)
+            for v in tts.voices(refresh=True):
+                if (
+                    args.lang
+                    and (v.labels or {}).get("language")
+                    and (v.labels or {}).get("language", "").lower()[:2] != args.lang[:2]
+                ):
+                    continue
+                print(v.summary())
+            print("\nVoix natives par langue : iris voices library --lang fr")
+            return 0
+        if engine == "cartesia":
+            from iris.tts.cartesia import CartesiaTTS
+
+            for v in CartesiaTTS(cfg.tts, cfg.reply_language).voices(args.lang or None):
+                print(
+                    f"{v['name']:24} {v['id']}  {v['language']:3} {v['gender']:7} {v['description'][:60]}"
+                )
+            return 0
+        if engine == "openai":
+            for name in (
+                "alloy",
+                "ash",
+                "ballad",
+                "coral",
+                "echo",
+                "fable",
+                "nova",
+                "onyx",
+                "sage",
+                "shimmer",
+                "verse",
+                "marin",
+                "cedar",
+            ):
+                print(name)
+            return 0
+        if engine == "kokoro":
             files = voices.kokoro_files(cfg.tts.kokoro_model, cfg.tts.kokoro_models_dir)
             print(
                 f"Modèle Kokoro : {files[0] if files else 'non installé (iris voices download kokoro)'}"
@@ -315,19 +433,58 @@ def cmd_voices(cfg: Config, args: argparse.Namespace) -> int:
         lang = args.lang or (
             cfg.assistant.language[:2] + "_" if cfg.assistant.language != "auto" else None
         )
+        if lang and len(lang) == 2:
+            lang = lang + "_"
         for name, desc in voices.list_remote_voices(lang):
             installed = "✓ " if voices.voice_files(name, cfg.tts.piper_voices_dir) else "  "
             print(f"{installed}{name:32} {desc}")
         return 0
+
     voice = args.voice or cfg.tts.piper_voice
     if voice == "kokoro":
         model, _ = voices.download_kokoro(
             args.model or cfg.tts.kokoro_model, cfg.tts.kokoro_models_dir, force=args.force
         )
-        print(f"Voix IA Kokoro prête : {model}")
+        print(f"Voix Kokoro prête : {model}")
         return 0
     model, _ = voices.download_voice(voice, cfg.tts.piper_voices_dir, force=args.force)
     print(f"Voix prête : {model}")
+    return 0
+
+
+def _elevenlabs(cfg: Config):
+    from iris.tts.elevenlabs import ElevenLabsTTS
+
+    return ElevenLabsTTS(cfg.tts, cfg.reply_language, cfg.audio.player)
+
+
+def _preview(found, index: int) -> int:
+    import shutil
+    import subprocess
+    import tempfile
+
+    from iris.tts.elevenlabs import preview_to_file
+
+    if not 1 <= index <= len(found):
+        print(f"--preview attend un numéro entre 1 et {len(found)}", file=sys.stderr)
+        return 2
+    voice = found[index - 1]
+    if not voice.preview_url:
+        print("Pas d'extrait pour cette voix.", file=sys.stderr)
+        return 1
+    player = next((p for p in ("mpv", "ffplay", "pw-play") if shutil.which(p)), None)
+    if player is None:
+        print(f"Extrait : {voice.preview_url} (installe mpv pour l'écouter ici)")
+        return 0
+    with tempfile.TemporaryDirectory(prefix="iris-preview-") as tmp:
+        path = preview_to_file(voice.preview_url, Path(tmp) / "preview.mp3")
+        argv = {
+            "mpv": ["mpv", "--no-terminal", "--no-video"],
+            "ffplay": ["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet"],
+            "pw-play": ["pw-play"],
+        }[player]
+        print(f"▶ {voice.name}")
+        subprocess.run([*argv, str(path)], check=False)
     return 0
 
 

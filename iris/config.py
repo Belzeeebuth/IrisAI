@@ -86,13 +86,34 @@ class TTSConfig:
     openai_instructions: str = ""  # vide = style par défaut selon le ton
     openai_speed: float = 1.0
     openai_api_key_env: str = "OPENAI_API_KEY"
+    # ElevenLabs (voix IA de référence)
+    elevenlabs_voice: str = "Sarah"  # nom ou identifiant ; `iris voices list --engine elevenlabs`
+    elevenlabs_model: str = "eleven_multilingual_v2"
+    elevenlabs_output_format: str = "pcm_24000"
+    elevenlabs_stability: float = 0.45
+    elevenlabs_similarity: float = 0.8
+    elevenlabs_style: float = 0.15
+    elevenlabs_speed: float = 1.0
+    elevenlabs_speaker_boost: bool = True
+    elevenlabs_api_key_env: str = "ELEVENLABS_API_KEY"
+    elevenlabs_api_key: str = ""
+    elevenlabs_base_url: str = ""
+    # Cartesia Sonic (alternative premium, très faible latence)
+    cartesia_voice: str = ""  # identifiant de voix ; `iris voices list --engine cartesia`
+    cartesia_model: str = "sonic-3"
+    cartesia_emotion: str = ""  # ex. "content", "calm", "enthusiastic" (sonic-3)
+    cartesia_speed: float = 1.0
+    cartesia_api_key_env: str = "CARTESIA_API_KEY"
+    cartesia_version: str = "2026-08-14"
+    # Cache disque des synthèses (voix cloud)
+    cache: bool = True
+    cache_max_mb: int = 200
     # Piper (voix locale de secours)
     piper_voice: str = "fr_FR-siwis-medium"
     piper_voices_dir: str = ""
     piper_length_scale: float = 1.0
     piper_sentence_silence: float = 0.15
-    elevenlabs_voice_id: str = ""
-    elevenlabs_model: str = "eleven_multilingual_v2"
+    elevenlabs_voice_id: str = ""  # ancien nom, toujours accepté
     espeak_voice: str = "fr"
     max_spoken_chars: int = 600
 

@@ -50,32 +50,53 @@ cloud_fallback = false     # bascule sur l'API Whisper d'OpenAI si le modèle lo
 openai_model = "whisper-1"
 
 [tts]
-# "auto" : kokoro (voix IA locale) → piper → espeak → console.
-# Voix IA expressives : "kokoro" (local), "openai" (cloud OpenAI ou serveur local compatible), "elevenlabs" (cloud).
+# "auto" choisit la meilleure voix disponible : elevenlabs (si ELEVENLABS_API_KEY et allow_cloud)
+# → openai (si OPENAI_API_KEY) → cartesia (si CARTESIA_API_KEY) → kokoro (si installé) → piper → espeak → console.
 backend = "auto"
-# --- Kokoro : voix neuronale locale 24 kHz (`iris voices download kokoro`)
-kokoro_model = "kokoro-v1.0.onnx"    # ou kokoro-v1.0.int8.onnx (3× plus léger, un peu moins fin)
-kokoro_voice = ""          # vide = ff_siwis (fr) / af_heart (en) ; `iris voices list --engine kokoro`
-kokoro_speed = 1.0
-kokoro_lang = ""           # vide = suit assistant.language ; ex. "fr-fr", "en-us", "en-gb"
-kokoro_models_dir = ""     # vide = ~/.local/share/iris/kokoro
-# --- Endpoint OpenAI-compatible /audio/speech : OpenAI gpt-4o-mini-tts (voix pilotable par instructions),
-#     ou un serveur local (Kokoro-FastAPI http://localhost:8880/v1, Speaches…)
+max_spoken_chars = 600     # au-delà, la réponse est tronquée à l'oral (le texte complet reste dans le journal)
+cache = true               # mémorise les phrases déjà synthétisées (moins de latence et de crédits cloud)
+cache_max_mb = 200
+
+# --- ElevenLabs : la voix IA de référence (https://elevenlabs.io → Profile → API keys → ELEVENLABS_API_KEY)
+elevenlabs_voice = "Sarah"             # nom ou identifiant. Voix françaises natives : `iris voices library --lang fr`
+elevenlabs_model = "eleven_multilingual_v2"   # ou eleven_flash_v2_5 (latence minimale), eleven_v3 (le plus expressif)
+elevenlabs_output_format = "pcm_24000"
+elevenlabs_stability = 0.45            # bas = plus expressif, haut = plus régulier (v3 : 0.0 / 0.5 / 1.0)
+elevenlabs_similarity = 0.8
+elevenlabs_style = 0.15                # exagération du style (pas pour v3)
+elevenlabs_speed = 1.0                 # 0.7 → 1.2
+elevenlabs_speaker_boost = true
+elevenlabs_api_key_env = "ELEVENLABS_API_KEY"
+elevenlabs_api_key = ""                # ou directement ici (déconseillé)
+
+# --- OpenAI gpt-4o-mini-tts (voix pilotable par instructions) ou serveur local compatible (Kokoro-FastAPI, Speaches)
 openai_base_url = "https://api.openai.com/v1"
 openai_model = "gpt-4o-mini-tts"
 openai_voice = "coral"     # alloy, ash, ballad, coral, echo, fable, nova, onyx, sage, shimmer, verse, marin, cedar
 openai_instructions = ""   # vide = style dérivé du ton ; ex. "Voix chaleureuse et posée, léger sourire."
 openai_speed = 1.0
 openai_api_key_env = "OPENAI_API_KEY"
+
+# --- Cartesia Sonic (https://play.cartesia.ai → API keys → CARTESIA_API_KEY)
+cartesia_voice = ""        # identifiant de voix ; `iris voices list --engine cartesia --lang fr`
+cartesia_model = "sonic-3"
+cartesia_emotion = ""      # ex. "content", "calm", "enthusiastic", "curious" (sonic-3)
+cartesia_speed = 1.0
+cartesia_api_key_env = "CARTESIA_API_KEY"
+
+# --- Kokoro : voix neuronale locale (facultative, `iris voices download kokoro`)
+kokoro_model = "kokoro-v1.0.onnx"    # ou kokoro-v1.0.int8.onnx (3× plus léger)
+kokoro_voice = ""          # vide = ff_siwis (fr) / af_heart (en)
+kokoro_speed = 1.0
+kokoro_lang = ""           # vide = suit assistant.language ; ex. "fr-fr", "en-us"
+kokoro_models_dir = ""     # vide = ~/.local/share/iris/kokoro
+
 # --- Piper : voix locale de secours
 piper_voice = "fr_FR-siwis-medium"   # `iris voices list` pour les autres voix
 piper_voices_dir = ""      # vide = ~/.local/share/iris/voices
 piper_length_scale = 1.0   # < 1 = parle plus vite, > 1 = plus lentement
 piper_sentence_silence = 0.15
-elevenlabs_voice_id = ""   # nécessite ELEVENLABS_API_KEY dans l'environnement + privacy.allow_cloud
-elevenlabs_model = "eleven_multilingual_v2"
 espeak_voice = "fr"
-max_spoken_chars = 600     # au-delà, la réponse est tronquée à l'oral (le texte complet reste dans le journal)
 
 [privacy]
 allow_cloud = false        # interrupteur général : false = aucun octet ne quitte la machine

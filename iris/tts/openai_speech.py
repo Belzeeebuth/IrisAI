@@ -45,10 +45,16 @@ class OpenAISpeechTTS:
     name = "openai"
 
     def __init__(
-        self, cfg: TTSConfig, language: str = "fr", tone: str = "warm", player: str = "auto"
+        self,
+        cfg: TTSConfig,
+        language: str = "fr",
+        tone: str = "warm",
+        player: str = "auto",
+        cache=None,
     ) -> None:
         self.cfg = cfg
         self.player = player
+        self.cache = cache
         self.language = language if language in STYLE_BY_TONE else "fr"
         self.tone = tone
         self.base_url = cfg.openai_base_url.rstrip("/")
@@ -83,6 +89,20 @@ class OpenAISpeechTTS:
         text = clean_for_speech(text, self.cfg.max_spoken_chars)
         if not text:
             return b"", PCM_RATE
+        if self.cache is not None:
+            key = self.cache.key(
+                "openai",
+                self.base_url,
+                self.cfg.openai_model,
+                self.cfg.openai_voice,
+                self.instructions(language),
+                self.cfg.openai_speed,
+                text,
+            )
+            return self.cache.fetch(key, lambda: self._synthesize(text, language))
+        return self._synthesize(text, language)
+
+    def _synthesize(self, text: str, language: str | None) -> tuple[bytes, int]:
         payload = {
             "model": self.cfg.openai_model,
             "input": text,

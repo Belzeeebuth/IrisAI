@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.1 — Voix cloud premium, repli CPU
+
+- **ElevenLabs** devient la voix de référence : backend réécrit sans dépendance (`xi-api-key`, PCM 24 kHz), voix par **nom** résolue via `/v1/voices`, exploration de la **bibliothèque** communautaire par langue (`iris voices library --lang fr --preview N`) et ajout au compte (`iris voices add`), réglages `stability / similarity / style / speed / speaker_boost`, `language_code` pour flash/turbo/v3, `previous_text` pour la continuité entre phrases, arrondi de `stability` pour `eleven_v3`.
+- **Cartesia Sonic** : nouveau backend (`sonic-3`, émotions, `Cartesia-Version 2026-08-14`), `iris voices list --engine cartesia`.
+- **Cache disque** des synthèses cloud (`tts.cache`, `iris voices cache [--clear]`).
+- `tts.backend = "auto"` choisit la meilleure voix disponible selon les clés et `privacy.allow_cloud` ; Kokoro n'est plus installée par défaut (`install.sh --kokoro`).
+- `iris say --voice`, `iris voices list --engine elevenlabs|cartesia|openai`.
+- **STT** : bascule automatique sur CPU quand les bibliothèques CUDA manquent (`libcublas.so.12`), `iris doctor` affiche le périphérique effectif.
+
 ## 0.2.0 — Phase 2 : intégration système, voix IA, cerveau LLM
 
 - **Voix IA** : Kokoro-82M en local (backend par défaut, `iris voices download kokoro`), endpoint OpenAI-compatible `/audio/speech` (OpenAI `gpt-4o-mini-tts` avec instructions de style selon le ton, Kokoro-FastAPI, Speaches), lecture phrase par phrase en pipeline. Piper reste en secours.

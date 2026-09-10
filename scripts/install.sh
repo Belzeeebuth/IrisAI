@@ -5,6 +5,7 @@
 #   ./scripts/install.sh --no-service # sans le service systemd
 #   ./scripts/install.sh --no-voice   # sans télécharger la voix Piper
 #   ./scripts/install.sh --no-pacman  # ne pas toucher aux paquets système
+#   ./scripts/install.sh --kokoro     # ajouter la voix locale Kokoro (facultative, 325 Mo)
 #
 set -euo pipefail
 
@@ -17,14 +18,16 @@ WHISPER_MODEL="${IRIS_WHISPER_MODEL:-base}"
 WITH_SERVICE=1
 WITH_VOICE=1
 WITH_PACMAN=1
-EXTRAS="${IRIS_EXTRAS:-stt,tts,voice,audio}"
+EXTRAS="${IRIS_EXTRAS:-stt,tts,audio}"
 KOKORO_MODEL="${IRIS_KOKORO_MODEL:-kokoro-v1.0.onnx}"
+WITH_KOKORO=0
 
 for arg in "$@"; do
   case "$arg" in
     --no-service) WITH_SERVICE=0 ;;
     --no-voice) WITH_VOICE=0 ;;
     --no-pacman) WITH_PACMAN=0 ;;
+    --kokoro) WITH_KOKORO=1; EXTRAS="$EXTRAS,voice" ;;
     --extras=*) EXTRAS="${arg#--extras=}" ;;
     -h|--help) sed -n '2,10p' "$0"; exit 0 ;;
     *) echo "option inconnue : $arg" >&2; exit 2 ;;
@@ -63,10 +66,12 @@ say "Configuration : $("$BIN_DIR/iris" config path)"
 
 # 4. Voix + modèle ---------------------------------------------------------------
 if [[ $WITH_VOICE -eq 1 ]]; then
-  say "Voix IA Kokoro ($KOKORO_MODEL)…"
-  "$BIN_DIR/iris" voices download kokoro --model "$KOKORO_MODEL" || say "⚠ téléchargement Kokoro impossible (réseau ?) — Piper prendra le relais"
   say "Voix Piper de secours $VOICE…"
   "$BIN_DIR/iris" voices download "$VOICE" || true
+  if [[ $WITH_KOKORO -eq 1 ]]; then
+    say "Voix locale Kokoro ($KOKORO_MODEL)…"
+    "$BIN_DIR/iris" voices download kokoro --model "$KOKORO_MODEL" || say "⚠ téléchargement Kokoro impossible (réseau ?)"
+  fi
 fi
 say "Modèle Whisper « $WHISPER_MODEL » (téléchargé au premier lancement si absent)…"
 "$BIN_DIR/iris" models download "$WHISPER_MODEL" || say "⚠ téléchargement du modèle impossible pour l'instant (réseau ?)"
@@ -80,4 +85,5 @@ fi
 say "Diagnostic :"
 "$BIN_DIR/iris" doctor || true
 say "Terminé. Essaie : iris say \"Bonjour, je suis Iris\"   puis   iris listen --execute"
-say "Cerveau LLM (OpenCode Go/Zen) : clé sur https://opencode.ai/auth → OPENCODE_API_KEY, puis [llm] enabled = true et [privacy] allow_cloud = true (voir docs/LLM.md)."
+say "Voix IA : ELEVENLABS_API_KEY dans ~/.config/environment.d/iris.conf + [privacy] allow_cloud = true, puis iris voices library --lang fr (voir docs/VOICE.md)."
+say "Cerveau LLM (OpenCode Go/Zen) : clé sur https://opencode.ai/auth → OPENCODE_API_KEY, puis [llm] enabled = true (voir docs/LLM.md)."

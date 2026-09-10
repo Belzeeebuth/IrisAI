@@ -4,7 +4,7 @@
 
 - **Audio du micro** : capturé en mémoire par trames de 30 ms, découpé en phrases, transcrit, puis libéré. Aucun fichier audio n'est écrit (`iris listen` non plus). Iris ignore le micro pendant qu'elle parle.
 - **Transcription** : faster-whisper en local. Modèle téléchargé une fois depuis Hugging Face (`~/.cache/huggingface`), puis utilisé hors-ligne.
-- **Synthèse** : Piper en local (voix dans `~/.local/share/iris/voices`).
+- **Synthèse** : Piper ou Kokoro en local si tu n'as configuré aucune voix cloud. Les synthèses cloud sont mises en cache dans `~/.cache/iris/tts` (audio des réponses d'Iris uniquement, jamais ta voix) ; `iris voices cache --clear` l'efface.
 - **Compréhension** : règles locales, aucun modèle distant.
 
 ## Ce qui est écrit sur le disque
@@ -24,7 +24,8 @@ Note : le log INFO contient le texte entendu (« Entendu [idle] : … ») pour l
 |---|---|---|
 | Cerveau LLM (OpenCode Zen / Go, OpenAI, OpenRouter) | `privacy.allow_cloud = true`, `llm.enabled = true`, clé | Le texte des phrases non reconnues et des questions, la personnalité, la liste des capacités, et si `llm.context` : heure, classe + titre de la fenêtre active, workspace, batterie, trois dernières actions. Jamais l'audio. Avec `provider = "ollama"` (localhost), rien ne sort. |
 | Voix OpenAI (`tts.backend = "openai"`) | `privacy.allow_cloud = true`, `OPENAI_API_KEY` | Le texte des réponses d'Iris (pas pour un serveur `localhost`). |
-| ElevenLabs (voix) | `privacy.allow_cloud = true`, `tts.backend = "elevenlabs"`, `ELEVENLABS_API_KEY` | Le texte des réponses d'Iris. |
+| ElevenLabs (voix) | `privacy.allow_cloud = true`, `ELEVENLABS_API_KEY` (backend explicite ou `auto`) | Le texte des réponses d'Iris (une fois par phrase distincte grâce au cache). |
+| Cartesia (voix) | `privacy.allow_cloud = true`, `CARTESIA_API_KEY` | Le texte des réponses d'Iris. |
 | API Whisper OpenAI (repli STT) | `privacy.allow_cloud = true`, `stt.cloud_fallback = true`, `OPENAI_API_KEY` | L'audio de la phrase, uniquement si le moteur local échoue. |
 | Claude Code (phase 3) | `agents.claude_code_enabled = true` + `claude login` | Le texte après « demande à Claude … », via ton abonnement claude.ai. Jamais l'audio. |
 | Téléchargement des voix / modèles | commandes `iris voices download`, `iris models download` | Rien de personnel (simple téléchargement). |

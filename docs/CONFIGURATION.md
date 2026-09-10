@@ -58,7 +58,16 @@ Fichier : `~/.config/iris/config.toml` (`iris config path`). Créé avec toutes 
 
 | Clé | Défaut | Rôle |
 |---|---|---|
-| `backend` | `"auto"` | `kokoro` → `piper` → `espeak` → `console` ; ou `openai`, `elevenlabs`, `none`. |
+| `backend` | `"auto"` | auto = elevenlabs (si clé + allow_cloud) → openai → cartesia → kokoro → piper → espeak → console ; ou un nom explicite, `none`. |
+| `cache` / `cache_max_mb` | `true` / `200` | Cache disque des synthèses (`~/.cache/iris/tts`). |
+| `elevenlabs_voice` | `"Sarah"` | Nom (voix du compte, résolu via l'API) ou identifiant. `iris voices library --lang fr` pour une voix française native. |
+| `elevenlabs_model` | `eleven_multilingual_v2` | `eleven_flash_v2_5`, `eleven_turbo_v2_5`, `eleven_v3`. |
+| `elevenlabs_output_format` | `pcm_24000` | `pcm_16000` … `pcm_44100` (selon le plan). |
+| `elevenlabs_stability` / `elevenlabs_similarity` / `elevenlabs_style` | `0.45` / `0.8` / `0.15` | Réglages de voix (−1 pour ne pas envoyer). |
+| `elevenlabs_speed` / `elevenlabs_speaker_boost` | `1.0` / `true` | Débit 0.7 → 1.2. |
+| `elevenlabs_api_key_env` / `elevenlabs_api_key` | `ELEVENLABS_API_KEY` / `""` | |
+| `cartesia_voice` / `cartesia_model` / `cartesia_emotion` / `cartesia_speed` | `""` / `sonic-3` / `""` / `1.0` | `iris voices list --engine cartesia --lang fr`. |
+| `cartesia_api_key_env` / `cartesia_version` | `CARTESIA_API_KEY` / `2026-08-14` | |
 | `kokoro_model` | `"kokoro-v1.0.onnx"` | ou `kokoro-v1.0.int8.onnx` / `kokoro-v1.0.fp16.onnx` (`iris voices download kokoro --model …`). |
 | `kokoro_voice` | `""` | vide = `ff_siwis` (fr) / `af_heart` (en). |
 | `kokoro_speed` / `kokoro_lang` / `kokoro_models_dir` | `1.0` / `""` / `""` | Débit ; code espeak (`fr-fr`, `en-us`) ; dossier (`~/.local/share/iris/kokoro`). |

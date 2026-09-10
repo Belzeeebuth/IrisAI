@@ -72,3 +72,16 @@ def test_trigger_without_daemon(monkeypatch) -> None:
 
     monkeypatch.setattr(system, "run", lambda *a, **k: system.CmdResult(False, 1))
     assert main(["trigger"]) == 1
+
+
+def test_voices_list_openai_and_cache(capsys) -> None:
+    assert main(["voices", "list", "--engine", "openai"]) == 0
+    assert "coral" in capsys.readouterr().out
+    assert main(["voices", "cache"]) == 0
+    assert "Mo" in capsys.readouterr().out
+
+
+def test_voices_list_elevenlabs_without_key(monkeypatch, capsys) -> None:
+    monkeypatch.delenv("ELEVENLABS_API_KEY", raising=False)
+    assert main(["voices", "list", "--engine", "elevenlabs"]) == 1
+    assert "ELEVENLABS_API_KEY" in capsys.readouterr().err
