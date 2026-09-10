@@ -136,6 +136,44 @@ def run_checks(cfg: Config) -> list[Check]:
         )
     )
 
+    # --- voix IA
+    kokoro_files = voice_files_kokoro(cfg)
+    try:
+        importlib.import_module("kokoro_onnx")
+        checks.append(Check("module kokoro_onnx", True))
+        checks.append(
+            Check(
+                f"modèle Kokoro {cfg.tts.kokoro_model}",
+                kokoro_files is not None,
+                str(kokoro_files[0]) if kokoro_files else "",
+                "iris voices download kokoro",
+                "warn",
+            )
+        )
+    except Exception:
+        checks.append(
+            Check(
+                "voix IA Kokoro",
+                False,
+                "kokoro-onnx absent",
+                "pip install 'iris-assistant[voice]' puis iris voices download kokoro",
+                "warn" if cfg.tts.backend in ("auto", "kokoro") else "info",
+            )
+        )
+    if cfg.tts.backend == "openai":
+        from iris.tts.openai_speech import is_local_url
+
+        has_key = bool(os.environ.get(cfg.tts.openai_api_key_env, ""))
+        checks.append(
+            Check(
+                "voix OpenAI-compatible",
+                has_key or is_local_url(cfg.tts.openai_base_url),
+                f"{cfg.tts.openai_base_url} ({cfg.tts.openai_model}, {cfg.tts.openai_voice})",
+                f"exporte {cfg.tts.openai_api_key_env}",
+                "error",
+            )
+        )
+
     # --- TTS
     piper_ok = False
     try:
@@ -181,6 +219,38 @@ def run_checks(cfg: Config) -> list[Check]:
         )
     )
 
+    # --- LLM
+    if cfg.llm.enabled:
+        from iris.llm import LLMError, build_client
+
+        try:
+            client = build_client(cfg.llm, cfg.privacy.allow_cloud)
+            checks.append(
+                Check(
+                    "LLM",
+                    True,
+                    f"{cfg.llm.provider} · {cfg.llm.model} · api {client.api}",
+                    level="info",
+                )
+            )
+        except LLMError as exc:
+            checks.append(Check("LLM", False, str(exc), "iris llm info", "error"))
+    else:
+        checks.append(Check("LLM", True, "désactivé (llm.enabled = false)", level="info"))
+
+    # --- phase 2
+    checks.append(
+        _binary(
+            "wtype",
+            "dictée : sudo pacman -S wtype (repli : presse-papiers wl-copy)",
+            "info",
+            alternatives=("ydotool", "wl-copy"),
+        )
+    )
+    checks.append(_binary("makoctl", "notifications : mako", "info"))
+    checks.append(_binary("bluetoothctl", "Bluetooth : sudo pacman -S bluez-utils", "info"))
+    checks.append(_binary("rfkill", "Wi-Fi / mode avion : util-linux", "info"))
+
     # --- agents
     if cfg.agents.claude_code_enabled:
         checks.append(
@@ -199,6 +269,12 @@ def run_checks(cfg: Config) -> list[Check]:
         )
     )
     return checks
+
+
+def voice_files_kokoro(cfg: Config):
+    from iris.tts.voices import kokoro_files
+
+    return kokoro_files(cfg.tts.kokoro_model, cfg.tts.kokoro_models_dir)
 
 
 def report(cfg: Config) -> tuple[str, bool]:

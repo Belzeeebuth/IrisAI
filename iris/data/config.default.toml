@@ -6,9 +6,10 @@
 
 [assistant]
 name = "Iris"
-language = "fr"            # "fr" ou "en" : langue des réponses et de la transcription
+language = "fr"            # "fr" | "en" | "auto" (répond dans la langue entendue, transcription auto)
 verbosity = "normal"       # "concise" | "normal" | "chatty"
 tone = "warm"              # "warm" (chaleureuse) | "direct" (directe) | "coach"
+personality = ""           # profil libre pour le LLM, ex. "Tutoie-moi, sois directe et un peu taquine."
 active_window_s = 8.0      # après « Hey Iris » seule, temps d'attente d'une commande (s)
 follow_up_window_s = 5.0   # après une commande, fenêtre pour enchaîner sans mot d'activation (s)
 confirm_timeout_s = 12.0   # délai de réponse à « Veux-tu vraiment … ? » (s)
@@ -49,7 +50,24 @@ cloud_fallback = false     # bascule sur l'API Whisper d'OpenAI si le modèle lo
 openai_model = "whisper-1"
 
 [tts]
-backend = "auto"           # "auto" | "piper" | "elevenlabs" | "espeak" | "console" | "none"
+# "auto" : kokoro (voix IA locale) → piper → espeak → console.
+# Voix IA expressives : "kokoro" (local), "openai" (cloud OpenAI ou serveur local compatible), "elevenlabs" (cloud).
+backend = "auto"
+# --- Kokoro : voix neuronale locale 24 kHz (`iris voices download kokoro`)
+kokoro_model = "kokoro-v1.0.onnx"    # ou kokoro-v1.0.int8.onnx (3× plus léger, un peu moins fin)
+kokoro_voice = ""          # vide = ff_siwis (fr) / af_heart (en) ; `iris voices list --engine kokoro`
+kokoro_speed = 1.0
+kokoro_lang = ""           # vide = suit assistant.language ; ex. "fr-fr", "en-us", "en-gb"
+kokoro_models_dir = ""     # vide = ~/.local/share/iris/kokoro
+# --- Endpoint OpenAI-compatible /audio/speech : OpenAI gpt-4o-mini-tts (voix pilotable par instructions),
+#     ou un serveur local (Kokoro-FastAPI http://localhost:8880/v1, Speaches…)
+openai_base_url = "https://api.openai.com/v1"
+openai_model = "gpt-4o-mini-tts"
+openai_voice = "coral"     # alloy, ash, ballad, coral, echo, fable, nova, onyx, sage, shimmer, verse, marin, cedar
+openai_instructions = ""   # vide = style dérivé du ton ; ex. "Voix chaleureuse et posée, léger sourire."
+openai_speed = 1.0
+openai_api_key_env = "OPENAI_API_KEY"
+# --- Piper : voix locale de secours
 piper_voice = "fr_FR-siwis-medium"   # `iris voices list` pour les autres voix
 piper_voices_dir = ""      # vide = ~/.local/share/iris/voices
 piper_length_scale = 1.0   # < 1 = parle plus vite, > 1 = plus lentement
@@ -61,6 +79,7 @@ max_spoken_chars = 600     # au-delà, la réponse est tronquée à l'oral (le t
 
 [privacy]
 allow_cloud = false        # interrupteur général : false = aucun octet ne quitte la machine
+                           # (à passer à true pour OpenCode Zen/Go, OpenAI ou ElevenLabs ; les URL localhost restent toujours permises)
 store_transcripts = false  # conserver le texte des phrases entendues dans le journal
 journal_actions = true     # tracer chaque action exécutée (traçabilité)
 # L'audio du micro n'est jamais écrit sur le disque : il vit en mémoire le temps de la transcription.
@@ -74,6 +93,32 @@ volume_step = 5            # pas (en %) pour « monte / baisse le son »
 brightness_step = 10
 search_url = "https://duckduckgo.com/?q={q}"
 notify = true              # notifications bureau (notify-send) en plus de la voix
+typing_tool = "auto"       # dictée : "wtype" | "ydotool" | "clipboard" (wl-copy + notification)
+status_file = ""           # état pour Waybar/Quickshell ; vide = $XDG_RUNTIME_DIR/iris/state.json
+waybar_signal = 0          # ex. 8 → `pkill -RTMIN+8 waybar` à chaque changement (voir contrib/waybar)
+
+# ----------------------------------------------------------------------------
+# Cerveau LLM : phrases inconnues, questions ouvertes, personnalité, contexte.
+# Provider par défaut : OpenCode Go (10 $/mois, modèles ouverts) ; OpenCode Zen (paiement à l'usage,
+# modèles frontière) ; ou n'importe quel endpoint OpenAI-compatible (Ollama en local, OpenRouter…).
+# Clé : https://opencode.ai/auth → variable d'environnement OPENCODE_API_KEY (ou api_key ci-dessous).
+# ----------------------------------------------------------------------------
+[llm]
+enabled = false
+provider = "opencode-go"   # "opencode-go" | "opencode-zen" | "openai" | "openrouter" | "ollama" | "custom"
+base_url = ""              # custom : ex. "http://localhost:11434/v1"
+api = "auto"               # "auto" | "chat" (OpenAI /chat/completions) | "messages" (Anthropic /messages)
+model = "glm-5.3-flash"    # Go : glm-5.3-flash, minimax-m3, kimi-k2.6, qwen3.7-plus… ; Zen : claude-haiku-4-5, gpt-5.4-mini…
+api_key_env = "OPENCODE_API_KEY"
+api_key = ""
+timeout_s = 30.0
+max_tokens = 400
+temperature = 0.4
+fallback_nlu = true        # phrase non reconnue par les règles → le LLM choisit une action Iris ou répond
+chat = true                # « Iris, explique-moi … », « pourquoi … », « question : … »
+context = true             # transmet heure, fenêtre active, workspace et dernières actions
+history_turns = 6          # mémoire de conversation (tours) gardée en RAM
+system_prompt_extra = ""
 
 [agents]
 # Phase 3 (expérimental) : « Iris, demande à Claude … » délègue au CLI Claude Code,
@@ -88,6 +133,22 @@ claude_workdir = ""        # vide = dossier personnel
 # Exemples :
 # "mon éditeur" = "zed"
 # "mes mails" = "webapp:https://mail.proton.me"
+
+[bluetooth]
+# Alias pour « connecte mes écouteurs » : nom prononcé = nom (ou adresse MAC) tel que listé par bluetoothctl.
+# "mes écouteurs" = "WH-1000XM5"
+
+# ----------------------------------------------------------------------------
+# Sessions de workspaces : « ouvre ma session vidéo » lance chaque application sur son workspace.
+# « sauvegarde la session vidéo » enregistre les fenêtres ouvertes sous ce nom (dans le journal).
+# ----------------------------------------------------------------------------
+# [[sessions]]
+# name = "video"
+# phrases = ["ma session vidéo", "session montage"]
+# apps = [
+#   { workspace = 3, exec = "kdenlive" },
+#   { workspace = 4, exec = "$TERMINAL -e btop" },
+# ]
 
 # ----------------------------------------------------------------------------
 # Commandes personnalisées : une phrase (ou plusieurs) → un script shell.

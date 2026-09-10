@@ -1,0 +1,9 @@
+/* État d'Iris dans Waybar : la classe CSS suit l'état (idle, active, thinking, speaking, dictating, confirming, paused, off). */
+#custom-iris { padding: 0 8px; }
+#custom-iris.active     { color: #7aa2f7; }
+#custom-iris.thinking   { color: #e0af68; }
+#custom-iris.speaking   { color: #9ece6a; }
+#custom-iris.dictating  { color: #bb9af7; }
+#custom-iris.confirming { color: #f7768e; }
+#custom-iris.paused,
+#custom-iris.off        { opacity: 0.45; }

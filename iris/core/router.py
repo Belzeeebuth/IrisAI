@@ -1,7 +1,9 @@
 """Routeur : intention → action → réponse.
 
 Chaque intention a un gestionnaire ``_h_<nom>``. Les erreurs sont capturées et transformées
-en réponse parlée ; chaque exécution est tracée dans le journal.
+en réponse parlée ; chaque exécution est tracée dans le journal. Le LLM (``brain``) peut
+proposer une action : ``intent_from_decision`` la convertit en intention ordinaire, qui repasse
+par les mêmes confirmations et gestionnaires.
 """
 
 from __future__ import annotations
@@ -12,12 +14,27 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from iris.actions import audio_ctl, brightness, clock, hyprland, media, notify, omarchy, power, web
+from iris.actions import (
+    audio_ctl,
+    brightness,
+    clock,
+    devices,
+    hyprland,
+    media,
+    monitors,
+    notifications,
+    notify,
+    omarchy,
+    power,
+    typing,
+    web,
+)
 from iris.actions.apps import AppResolver
+from iris.actions.sessions import SessionManager
 from iris.config import Config
 from iris.core.journal import Journal
 from iris.core.phrasebook import Phrasebook
-from iris.nlu.intents import Intent
+from iris.nlu.intents import CONFIRM_INTENTS, Intent
 
 log = logging.getLogger(__name__)
 
@@ -28,7 +45,7 @@ class Reply:
     ok: bool = True
     keep_listening: bool = True  # garder la fenêtre d'enchaînement après la réponse
     data: dict[str, Any] = field(default_factory=dict)
-    control: str | None = None  # "stop" | "pause" | "resume" — instructions pour l'assistant
+    control: str | None = None  # "stop" | "pause" | "resume" | "dictate" | "dictate_stop"
 
     def __str__(self) -> str:
         return self.text
@@ -42,6 +59,8 @@ class Router:
         journal: Journal | None = None,
         apps: AppResolver | None = None,
         agent=None,
+        brain=None,
+        sessions: SessionManager | None = None,
     ) -> None:
         self.cfg = cfg
         self.p = phrases
@@ -50,18 +69,43 @@ class Router:
             cfg.apps, cfg.system.terminal, cfg.system.browser, cfg.system.editor
         )
         self.agent = agent
-        self.lang = phrases.lang
+        self.brain = brain
+        self.sessions = sessions or SessionManager(cfg.sessions, journal, self.apps)
+
+    @property
+    def lang(self) -> str:
+        return self.p.lang
 
     # ------------------------------------------------------------------ API
+    def knows(self, intent_name: str) -> bool:
+        return hasattr(self, f"_h_{intent_name}")
+
     def confirmation_question(self, intent: Intent) -> str | None:
         if not intent.requires_confirmation:
             return None
         if intent.name == "custom" and intent.command:
             return self.p.get("confirm_custom", name=intent.command.name)
-        return (
-            self.p.get(f"confirm_{intent.name}")
-            if intent.name in ("close_all", "suspend", "shutdown", "reboot")
-            else self.p.get("confirm_custom", name=intent.name)
+        if intent.name in ("close_all", "suspend", "shutdown", "reboot"):
+            return self.p.get(f"confirm_{intent.name}")
+        return self.p.get("confirm_custom", name=intent.name)
+
+    def intent_from_decision(self, decision) -> Intent | None:
+        """Intention ordinaire construite depuis une décision du LLM (None si inconnue)."""
+        name = decision.intent
+        if not name or not self.knows(name) or name in ("custom", "ask_llm", "ask_agent"):
+            return None
+        slots = dict(decision.slots)
+        if "n" in slots:
+            try:
+                slots["n"] = int(slots["n"])
+            except (TypeError, ValueError):
+                del slots["n"]
+        return Intent(
+            name,
+            slots,
+            confidence=0.6,
+            text=decision.reply or "",
+            requires_confirmation=name in CONFIRM_INTENTS,
         )
 
     def execute(self, intent: Intent) -> Reply:
@@ -94,6 +138,9 @@ class Router:
     def _hypr(self) -> None:
         if not hyprland.available():
             raise RuntimeError(self.p.get("hyprland_unavailable"))
+
+    def _plural(self, n: int) -> str:
+        return "s" if n > 1 else ""
 
     # ------------------------------------------------------------------ social / contrôle
     def _h_greet(self, intent: Intent) -> Reply:
@@ -132,6 +179,21 @@ class Router:
     def _h_say(self, intent: Intent) -> Reply:
         return Reply(str(intent.slot("text", "")))
 
+    # ------------------------------------------------------------------ dictée
+    def _h_type_text(self, intent: Intent) -> Reply:
+        text = str(intent.slot("text", ""))
+        tool = typing.type_text(text, self.cfg.system.typing_tool)
+        key = "typed_clipboard" if tool == "clipboard" else "typed"
+        return Reply(self.p.get(key), data={"tool": tool})
+
+    def _h_dictation_start(self, intent: Intent) -> Reply:
+        if typing.available_tool(self.cfg.system.typing_tool) is None:
+            raise RuntimeError("aucun outil de saisie (installe wtype)")
+        return Reply(self.p.get("dictation_started"), keep_listening=False, control="dictate")
+
+    def _h_dictation_stop(self, intent: Intent) -> Reply:
+        return Reply(self.p.get("dictation_stopped"), keep_listening=False, control="dictate_stop")
+
     # ------------------------------------------------------------------ applications
     def _h_open_app(self, intent: Intent) -> Reply:
         name = str(intent.slot("app", ""))
@@ -156,7 +218,7 @@ class Router:
         n = hyprland.close_all_windows()
         return Reply(self.p.get("close_all_done", n=n) if n else self.p.get("close_all_none"))
 
-    # ------------------------------------------------------------------ fenêtres / workspaces
+    # ------------------------------------------------------------------ fenêtres / workspaces / écrans
     def _h_window_close(self, intent: Intent) -> Reply:
         self._hypr()
         hyprland.close_active_window()
@@ -193,6 +255,30 @@ class Router:
         self._hypr()
         hyprland.workspace_relative(-1)
         return Reply(self.p.get("workspace_prev"))
+
+    def _direction_word(self, direction: str) -> str:
+        key = monitors.DIRECTIONS.get(direction.lower(), "")
+        canonical_key = {
+            "l": "left",
+            "r": "right",
+            "u": "up",
+            "d": "down",
+            "+1": "next",
+            "-1": "prev",
+        }.get(key, direction)
+        return self.p.get(canonical_key)
+
+    def _h_monitor_move(self, intent: Intent) -> Reply:
+        self._hypr()
+        direction = str(intent.slot("direction", "right"))
+        monitors.move_window_to_monitor(direction)
+        return Reply(self.p.get("monitor_moved", direction=self._direction_word(direction)))
+
+    def _h_monitor_focus(self, intent: Intent) -> Reply:
+        self._hypr()
+        direction = str(intent.slot("direction", "right"))
+        monitors.focus_monitor(direction)
+        return Reply(self.p.get("monitor_focused", direction=self._direction_word(direction)))
 
     # ------------------------------------------------------------------ volume / luminosité
     def _h_volume_set(self, intent: Intent) -> Reply:
@@ -278,6 +364,88 @@ class Router:
         omarchy.lock_screen()
         return Reply(self.p.get("locked"), keep_listening=False)
 
+    # ------------------------------------------------------------------ périphériques
+    def _h_bluetooth_on(self, intent: Intent) -> Reply:
+        devices.bluetooth_power(True)
+        return Reply(self.p.get("bluetooth_on"))
+
+    def _h_bluetooth_off(self, intent: Intent) -> Reply:
+        devices.bluetooth_power(False)
+        return Reply(self.p.get("bluetooth_off"))
+
+    def _bt_query(self, intent: Intent) -> str:
+        raw = str(intent.slot("device_raw") or intent.slot("device") or "")
+        aliases = {k.lower(): v for k, v in self.cfg.bluetooth.items()}
+        from iris.nlu.normalize import canonical
+
+        for candidate in (raw, str(intent.slot("device", ""))):
+            if canonical(candidate) in {canonical(k) for k in aliases}:
+                return candidate
+        return str(intent.slot("device") or raw)
+
+    def _h_bluetooth_connect(self, intent: Intent) -> Reply:
+        name = devices.bluetooth_connect(self._bt_query(intent), self.cfg.bluetooth)
+        return Reply(self.p.get("bluetooth_connected", device=name))
+
+    def _h_bluetooth_disconnect(self, intent: Intent) -> Reply:
+        name = devices.bluetooth_disconnect(self._bt_query(intent), self.cfg.bluetooth)
+        return Reply(self.p.get("bluetooth_disconnected", device=name))
+
+    def _h_wifi_on(self, intent: Intent) -> Reply:
+        devices.wifi_power(True)
+        return Reply(self.p.get("wifi_on"))
+
+    def _h_wifi_off(self, intent: Intent) -> Reply:
+        devices.wifi_power(False)
+        return Reply(self.p.get("wifi_off"))
+
+    def _h_airplane_on(self, intent: Intent) -> Reply:
+        devices.airplane_mode(True)
+        return Reply(self.p.get("airplane_on"))
+
+    def _h_airplane_off(self, intent: Intent) -> Reply:
+        devices.airplane_mode(False)
+        return Reply(self.p.get("airplane_off"))
+
+    def _h_battery(self, intent: Intent) -> Reply:
+        info = devices.battery()
+        if info is None:
+            return Reply(self.p.get("battery_none"), ok=False)
+        percent, status = info
+        suffix = self.p.get("battery_charging") if status.lower() == "charging" else ""
+        return Reply(self.p.get("battery", n=percent, status=suffix))
+
+    def _h_audio_output_switch(self, intent: Intent) -> Reply:
+        name = devices.switch_audio_output()
+        return Reply(self.p.get("audio_output_switched", name=name))
+
+    # ------------------------------------------------------------------ notifications
+    def _h_notifications_read(self, intent: Intent) -> Reply:
+        items = notifications.history(limit=5)
+        return Reply(notifications.summarize(items, self.lang))
+
+    def _h_notifications_dismiss(self, intent: Intent) -> Reply:
+        notifications.dismiss_all()
+        return Reply(self.p.get("notifications_dismissed"))
+
+    def _h_dnd_on(self, intent: Intent) -> Reply:
+        notifications.do_not_disturb(True)
+        return Reply(self.p.get("dnd_on"))
+
+    def _h_dnd_off(self, intent: Intent) -> Reply:
+        notifications.do_not_disturb(False)
+        return Reply(self.p.get("dnd_off"))
+
+    # ------------------------------------------------------------------ sessions
+    def _h_session_open(self, intent: Intent) -> Reply:
+        name, n = self.sessions.open(str(intent.slot("name", "")), self._launcher())
+        return Reply(self.p.get("session_opened", name=name, n=n, s=self._plural(n)))
+
+    def _h_session_save(self, intent: Intent) -> Reply:
+        name = str(intent.slot("name", ""))
+        n = self.sessions.save(name)
+        return Reply(self.p.get("session_saved", name=name, n=n, s=self._plural(n)))
+
     # ------------------------------------------------------------------ alimentation
     def _h_suspend(self, intent: Intent) -> Reply:
         power.suspend()
@@ -323,7 +491,17 @@ class Router:
             )
         return Reply(command.reply or self.p.get("custom_done", name=command.name))
 
-    # ------------------------------------------------------------------ agents
+    # ------------------------------------------------------------------ IA
+    def _h_ask_llm(self, intent: Intent) -> Reply:
+        if self.brain is None:
+            return Reply(self.p.get("llm_disabled"), ok=False)
+        question = intent.text or str(intent.slot("prompt", ""))
+        try:
+            answer = self.brain.converse(question, self.lang)
+        except Exception as exc:  # noqa: BLE001
+            return Reply(self.p.get("llm_failed", reason=str(exc)), ok=False)
+        return Reply(answer or self.p.get("not_understood"), data={"answer": answer})
+
     def _h_ask_agent(self, intent: Intent) -> Reply:
         if self.agent is None or not getattr(self.agent, "enabled", False):
             return Reply(self.p.get("agent_disabled"), ok=False)

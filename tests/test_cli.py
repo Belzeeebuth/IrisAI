@@ -52,3 +52,23 @@ def test_journal_lists_actions(capsys) -> None:
 def test_doctor_runs(capsys) -> None:
     main(["doctor"])
     assert "diagnostic" in capsys.readouterr().out
+
+
+def test_llm_info_and_status(capsys) -> None:
+    assert main(["llm", "info"]) == 0
+    out = capsys.readouterr().out
+    assert "opencode-go" in out and "ABSENTE" in out
+    assert main(["status", "--waybar"]) == 0
+    assert '"alt": "off"' in capsys.readouterr().out
+
+
+def test_voices_list_kokoro(capsys) -> None:
+    assert main(["voices", "list", "--engine", "kokoro"]) == 0
+    assert "ff_siwis" in capsys.readouterr().out
+
+
+def test_trigger_without_daemon(monkeypatch) -> None:
+    from iris.actions import system
+
+    monkeypatch.setattr(system, "run", lambda *a, **k: system.CmdResult(False, 1))
+    assert main(["trigger"]) == 1

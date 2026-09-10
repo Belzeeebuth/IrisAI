@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "iris-assistant"
-version = "0.1.0"
+version = "0.2.0"
 description = "Iris — assistant vocal natif pour Omarchy OS (Hyprland)"
 readme = "README.md"
 license = { text = "MIT" }
@@ -36,13 +36,15 @@ stt = ["faster-whisper>=1.1"]
 tts = ["piper-tts>=1.3"]
 # Capture micro via PortAudio + VAD WebRTC (sinon Iris utilise parec / pw-record)
 audio = ["sounddevice>=0.4.6", "webrtcvad-wheels>=2.0.14"]
+# Voix IA locale Kokoro (ONNX Runtime, CPU)
+voice = ["kokoro-onnx>=0.4"]
 # Détection du mot d'activation sur l'audio brut (modèle personnalisé « hey iris »)
 wakeword = ["openwakeword>=0.6"]
 # Backends cloud optionnels (ElevenLabs, fallback Whisper API)
 cloud = ["requests>=2.31"]
 # Tout le mode local
-local = ["iris-assistant[stt,tts,audio,wakeword]"]
-all = ["iris-assistant[stt,tts,audio,wakeword,cloud]"]
+local = ["iris-assistant[stt,tts,voice,audio,wakeword]"]
+all = ["iris-assistant[stt,tts,voice,audio,wakeword,cloud]"]
 dev = ["pytest>=8", "ruff>=0.5"]
 
 [project.scripts]

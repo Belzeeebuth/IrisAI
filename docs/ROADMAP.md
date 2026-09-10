@@ -25,31 +25,35 @@ Objectif : dire « Hey Iris, monte le son » et que ça marche, en local.
 - [ ] Modèle openWakeWord « hey iris » pré-entraîné livré dans `iris/data/`
 - [ ] Paquet AUR `iris-assistant`
 
-## Phase 2 — Intégration système
+## Phase 2 — Intégration système ✅ (v0.2)
 
 Objectif : Iris devient un citoyen du bureau Omarchy.
 
-- [ ] Dictée : « Iris, écris : … » tape le texte dans la fenêtre active (`wtype` / `ydotool`), mode « commande » vs « dictée »
-- [ ] Widget d'état Waybar (module custom : idle / écoute / réflexion / parle) et variante Quickshell
-- [ ] Notifications riches (icône, actions cliquables) et lecture des notifications récentes (mako)
-- [ ] Sessions de workspaces nommées : « ouvre ma session vidéo » (apps + positions), sauvegarde/restauration via `hyprctl clients`
-- [ ] Multi-écrans : « envoie ça sur l'écran de droite »
-- [ ] Périphériques : Bluetooth (`bluetuith`/`bluetoothctl`), Wi-Fi (`iwctl`/`nmcli`), sortie audio (`omarchy-cmd-audio-switch`)
-- [ ] Raccourci push-to-talk (Super + espace) via keybinding Hyprland → `iris listen --execute`
-- [ ] Découpage de plusieurs commandes dans une phrase (« ouvre A et ferme B »)
-- [ ] Localisation : détection auto fr/en par phrase
+- [x] Dictée : « écris : … » tape dans la fenêtre active (`wtype` → `ydotool` → presse-papiers) ; mode dictée continue jusqu'à « fin de dictée »
+- [x] Widget d'état Waybar (`iris status --waybar`, `contrib/waybar`, signal de rafraîchissement) — [ ] variante Quickshell
+- [x] Notifications mako : lecture résumée de l'historique, effacement, ne pas déranger
+- [x] Sessions de workspaces nommées (`[[sessions]]`) + sauvegarde des fenêtres ouvertes
+- [x] Multi-écrans : « envoie ça sur l'écran de droite », « va sur l'écran de gauche »
+- [x] Périphériques : Bluetooth (`bluetoothctl`, alias, correspondance floue), Wi-Fi (`nmcli`/`rfkill`), mode avion, batterie, sortie audio (`omarchy-cmd-audio-switch`/`wpctl`)
+- [x] Push-to-talk : `iris trigger` (SIGUSR1) + raccourci Hyprland (`contrib/hypr/iris.conf`), pause par SIGUSR2
+- [x] Découpage de plusieurs commandes dans une phrase, formes elliptiques comprises
+- [x] Langue automatique : réponses dans la langue détectée par Whisper (`assistant.language = "auto"`)
+- [x] **Voix IA** : Kokoro local (défaut), OpenAI-compatible (`gpt-4o-mini-tts`, Kokoro-FastAPI, Speaches), ElevenLabs ; lecture en pipeline phrase par phrase
+- [x] **Cerveau LLM** (avancé depuis la phase 3) : OpenCode Go / Zen, OpenAI, OpenRouter, Ollama, custom ; repli NLU avec liste des capacités en JSON, questions ouvertes, personnalité, contexte, historique
+- [ ] Notifications riches émises par Iris (icône, actions cliquables)
+- [ ] Widget Quickshell
 
 ## Phase 3 — Agents IA + mémoire contextuelle
 
-Objectif : au-delà des règles, avec Claude via l'abonnement claude.ai (**pas l'API**).
+Objectif : Iris agit dans la durée et se souvient.
 
-- [ ] Pont Claude Code (`claude -p`) asynchrone : Iris répond « je demande à Claude » et notifie la réponse
-- [ ] Repli NLU → LLM : une phrase non reconnue par les règles est envoyée à Claude avec la liste des outils d'Iris (schéma JSON), qui renvoie l'intention à exécuter
-- [ ] Lancement d'agents en arrière-plan (`claude`, `codex`, scripts) avec suivi : « surveille la compilation » → notification à la fin, résumé vocal
-- [ ] Mémoire contextuelle SQLite : projets ouverts, dernier workspace, tâches en cours, préférences apprises
+- [ ] Pont Claude Code (`claude -p`, abonnement claude.ai, **pas d'API**) asynchrone : « je demande à Claude » puis notification et résumé vocal
+- [ ] Agents en arrière-plan (`claude`, `opencode`, `codex`, scripts) avec suivi : « surveille la compilation » → notification à la fin
+- [ ] Mémoire contextuelle SQLite : projets ouverts, dernier workspace, tâches en cours, préférences apprises ; historique LLM persistant
 - [ ] « Veux-tu reprendre ta session de codage d'hier ? » au démarrage (opt-in)
-- [ ] Transcription voix → prompt pour Claude Code dans le terminal actif (style BridgeVoice)
-- [ ] LLM local optionnel (Ollama) pour rester 100 % hors-ligne
+- [ ] Transcription voix → prompt dans le terminal actif (style BridgeVoice)
+- [ ] Réponses LLM en streaming (phrase par phrase vers la voix)
+- [ ] Outils LLM avancés : lecture d'un fichier, résumé de la fenêtre active, calculs
 
 ## Phase 4 — Personnalisation + apprentissage
 

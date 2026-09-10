@@ -17,7 +17,8 @@ WHISPER_MODEL="${IRIS_WHISPER_MODEL:-base}"
 WITH_SERVICE=1
 WITH_VOICE=1
 WITH_PACMAN=1
-EXTRAS="${IRIS_EXTRAS:-stt,tts,audio}"
+EXTRAS="${IRIS_EXTRAS:-stt,tts,voice,audio}"
+KOKORO_MODEL="${IRIS_KOKORO_MODEL:-kokoro-v1.0.onnx}"
 
 for arg in "$@"; do
   case "$arg" in
@@ -36,7 +37,7 @@ say() { printf '\033[1;35m[iris]\033[0m %s\n' "$*"; }
 if [[ $WITH_PACMAN -eq 1 ]] && command -v pacman >/dev/null; then
   say "Paquets système (pacman)…"
   sudo pacman -S --needed --noconfirm \
-    python uv pipewire wireplumber libpulse brightnessctl playerctl libnotify espeak-ng
+    python uv pipewire wireplumber libpulse brightnessctl playerctl libnotify espeak-ng wtype
 else
   say "Paquets système ignorés (pas de pacman ou --no-pacman)."
 fi
@@ -62,8 +63,10 @@ say "Configuration : $("$BIN_DIR/iris" config path)"
 
 # 4. Voix + modèle ---------------------------------------------------------------
 if [[ $WITH_VOICE -eq 1 ]]; then
-  say "Voix Piper $VOICE…"
-  "$BIN_DIR/iris" voices download "$VOICE"
+  say "Voix IA Kokoro ($KOKORO_MODEL)…"
+  "$BIN_DIR/iris" voices download kokoro --model "$KOKORO_MODEL" || say "⚠ téléchargement Kokoro impossible (réseau ?) — Piper prendra le relais"
+  say "Voix Piper de secours $VOICE…"
+  "$BIN_DIR/iris" voices download "$VOICE" || true
 fi
 say "Modèle Whisper « $WHISPER_MODEL » (téléchargé au premier lancement si absent)…"
 "$BIN_DIR/iris" models download "$WHISPER_MODEL" || say "⚠ téléchargement du modèle impossible pour l'instant (réseau ?)"
@@ -77,3 +80,4 @@ fi
 say "Diagnostic :"
 "$BIN_DIR/iris" doctor || true
 say "Terminé. Essaie : iris say \"Bonjour, je suis Iris\"   puis   iris listen --execute"
+say "Cerveau LLM (OpenCode Go/Zen) : clé sur https://opencode.ai/auth → OPENCODE_API_KEY, puis [llm] enabled = true et [privacy] allow_cloud = true (voir docs/LLM.md)."

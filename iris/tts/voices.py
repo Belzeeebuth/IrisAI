@@ -13,6 +13,23 @@ from iris import paths
 log = logging.getLogger(__name__)
 
 HF_BASE = "https://huggingface.co/rhasspy/piper-voices/resolve/main"
+KOKORO_RELEASE = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1"
+KOKORO_VOICES_FILE = "voices-v1.0.bin"
+KOKORO_MODELS = {
+    "kokoro-v1.0.onnx": "fp32, 325 Mo — qualité maximale",
+    "kokoro-v1.0.fp16.onnx": "fp16, 164 Mo",
+    "kokoro-v1.0.int8.onnx": "int8, 114 Mo — le plus léger, un peu moins fin",
+}
+KOKORO_KNOWN_VOICES = {
+    "ff_siwis": "Français, féminine (la seule voix française de Kokoro v1.0)",
+    "af_heart": "Anglais US, féminine — la meilleure voix anglaise",
+    "af_bella": "Anglais US, féminine",
+    "af_nicole": "Anglais US, féminine, chuchotée",
+    "am_michael": "Anglais US, masculine",
+    "am_fenrir": "Anglais US, masculine",
+    "bf_emma": "Anglais UK, féminine",
+    "bm_george": "Anglais UK, masculine",
+}
 VOICES_JSON = f"{HF_BASE}/voices.json"
 
 # Sélection hors-ligne (la liste complète vient de voices.json).
@@ -118,3 +135,38 @@ def list_remote_voices(language: str | None = None) -> list[tuple[str, str]]:
         speakers = info.get("num_speakers", 1)
         result.append((key, f"{lang}, {quality}, {speakers} locuteur(s)"))
     return result
+
+
+# ---------------------------------------------------------------------------- Kokoro
+def kokoro_dir(configured: str = "") -> Path:
+    return Path(configured).expanduser() if configured else paths.data_dir() / "kokoro"
+
+
+def kokoro_files(
+    model: str = "kokoro-v1.0.onnx", configured_dir: str = ""
+) -> tuple[Path, Path] | None:
+    """(modèle .onnx, voices .bin) si Kokoro est installé."""
+    base = kokoro_dir(configured_dir)
+    model_path = base / model
+    voices_path = base / KOKORO_VOICES_FILE
+    if model_path.exists() and voices_path.exists():
+        return model_path, voices_path
+    return None
+
+
+def download_kokoro(
+    model: str = "kokoro-v1.0.onnx", configured_dir: str = "", force: bool = False
+) -> tuple[Path, Path]:
+    if model not in KOKORO_MODELS:
+        raise ValueError(f"Modèle Kokoro inconnu : {model} (choix : {', '.join(KOKORO_MODELS)})")
+    base = kokoro_dir(configured_dir)
+    base.mkdir(parents=True, exist_ok=True)
+    model_path = base / model
+    voices_path = base / KOKORO_VOICES_FILE
+    if not voices_path.exists() or force:
+        log.info("Téléchargement des voix Kokoro…")
+        _download(f"{KOKORO_RELEASE}/{KOKORO_VOICES_FILE}", voices_path)
+    if not model_path.exists() or force:
+        log.info("Téléchargement du modèle Kokoro %s…", model)
+        _download(f"{KOKORO_RELEASE}/{model}", model_path)
+    return model_path, voices_path

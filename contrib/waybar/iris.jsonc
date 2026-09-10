@@ -1,0 +1,17 @@
+// Module Waybar pour Iris — à fusionner dans ~/.config/waybar/config.jsonc
+// 1. ajoute "custom/iris" dans "modules-right" (ou left/center) ;
+// 2. colle le bloc ci-dessous au niveau racine ;
+// 3. importe contrib/waybar/iris.css dans ~/.config/waybar/style.css (@import) ;
+// 4. dans ~/.config/iris/config.toml : [system] waybar_signal = 8  (rafraîchissement instantané).
+{
+  "custom/iris": {
+    "exec": "iris status --waybar",
+    "return-type": "json",
+    "interval": 5,
+    "signal": 8,
+    "format": "{}",
+    "tooltip": true,
+    "on-click": "iris trigger",
+    "on-click-right": "iris trigger --pause"
+  }
+}

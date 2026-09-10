@@ -20,6 +20,8 @@ DEVICE = r"(?:le |l'|la |the |my |mon |ma )?(?:pc|ordinateur|ordi|computer|syste
 ART = r"(?:l'|le |la |les |un |une |mon |ma |mes |the |my |a |an |this |ce |cette )?"
 APP_WORD = r"(?:application |app |appli |logiciel |programme )?"
 WS_WORD = r"(?:workspace|bureau|espace de travail|espace|desktop)"
+DIRECTION = r"(?P<direction>gauche|droite|haut|bas|left|right|up|down|suivant|next|precedent|prev)"
+BT_ART = r"(?:mes |mon |ma |les |le |la |my |the |a |aux |au |to )?"
 
 
 @dataclass
@@ -102,6 +104,136 @@ RULES: list[Rule] = [
         [
             r"(?:quel jour|quelle date|la date d'aujourd'hui|(?:donne|dis) moi la date|on est le combien|"
             r"what(?:'s| is) the date|what day|today's date|^la date$)",
+        ],
+    ),
+    # --- dictée --------------------------------------------------------------------------
+    Rule(
+        "dictation_stop",
+        [
+            r"^(?:fin de (?:la )?dictee|arrete la dictee|termine la dictee|stop (?:la )?dictee|stop dictation|end dictation)$",
+        ],
+    ),
+    Rule(
+        "dictation_start",
+        [
+            r"^(?:mode dictee|dictee|commence la dictee|passe en (?:mode )?dictee|active la dictee|start dictation|dictation mode|dictation)$",
+        ],
+    ),
+    Rule(
+        "type_text",
+        [
+            r"^(?:ecris|ecrit|tape|saisis|dicte|note|write|type)\s*[:]?\s+(?P<text>.+)$",
+        ],
+    ),
+    # --- écrans --------------------------------------------------------------------------
+    Rule(
+        "monitor_move",
+        [
+            rf"(?:envoie|deplace|bouge|mets|move|send)\s+(?:cette |la |this |the |active |l')?(?:fenetre|window)?\s*"
+            rf"(?:sur|vers|to|on)\s+(?:l'|the )?(?:ecran|moniteur|monitor|screen)\s+(?:de |du |on the )?{DIRECTION}",
+            rf"(?:envoie|deplace|bouge|move|send)\s+(?:cette |la |this |the |active )?(?:fenetre|window)?\s*(?:sur|vers|to|on)\s+(?:the )?{DIRECTION}\s+(?:ecran|moniteur|monitor|screen)",
+        ],
+    ),
+    Rule(
+        "monitor_focus",
+        [
+            rf"(?:va|vas|passe|bascule|switch|go|focus)\s+(?:sur |to |on )?(?:l'|the )?(?:ecran|moniteur|monitor|screen)\s+(?:de |du |on the )?{DIRECTION}",
+            rf"^(?:ecran|screen|monitor|moniteur)\s+(?:de )?{DIRECTION}$",
+            rf"(?:focus|go to|switch to)\s+(?:the )?{DIRECTION}\s+(?:monitor|screen)",
+        ],
+    ),
+    # --- périphériques -------------------------------------------------------------------
+    Rule(
+        "bluetooth_off",
+        [
+            r"(?:desactive|eteins|coupe|disable|turn off)\s+(?:le |the )?bluetooth|bluetooth\s+off",
+        ],
+    ),
+    Rule(
+        "bluetooth_on",
+        [
+            r"(?:active|allume|mets|enable|turn on)\s+(?:le |the )?bluetooth|bluetooth\s+on",
+        ],
+    ),
+    Rule(
+        "bluetooth_disconnect",
+        [
+            rf"^(?:deconnecte|debranche|disconnect)\s+(?:moi\s+)?(?P<device_raw>{BT_ART}(?P<device>.+?))(?:\s+(?:en|via|par|over|du|from)\s+bluetooth)?$",
+        ],
+    ),
+    Rule(
+        "bluetooth_connect",
+        [
+            rf"^(?:connecte|connect|appaire|pair|branche)\s+(?:moi\s+)?(?P<device_raw>{BT_ART}(?P<device>.+?))(?:\s+(?:en|via|par|over|au|to)\s+bluetooth)?$",
+        ],
+    ),
+    Rule(
+        "wifi_off",
+        [r"(?:desactive|eteins|coupe|disable|turn off)\s+(?:le |the )?wi ?fi|wi ?fi\s+off"],
+    ),
+    Rule("wifi_on", [r"(?:active|allume|mets|enable|turn on)\s+(?:le |the )?wi ?fi|wi ?fi\s+on"]),
+    Rule(
+        "airplane_off",
+        [
+            r"(?:desactive|quitte|enleve|sors du|disable|turn off)\s+(?:le |the )?mode avion|airplane mode off"
+        ],
+    ),
+    Rule(
+        "airplane_on",
+        [
+            r"(?:active|mets|passe en|enable|turn on)\s+(?:le |the )?mode avion|airplane mode(?: on)?$|^mode avion$"
+        ],
+    ),
+    Rule(
+        "battery",
+        [
+            r"(?:niveau de (?:la )?batterie|combien de batterie|etat de la batterie|^(?:la |ma )?batterie$|battery(?: level| status)?$|how much battery)",
+        ],
+    ),
+    Rule(
+        "audio_output_switch",
+        [
+            r"(?:change|bascule|switch)\s+(?:de |la |the )?(?:sortie audio|sortie son|sortie|audio output|sound output|output)|sortie audio suivante|next audio output",
+        ],
+    ),
+    # --- notifications -------------------------------------------------------------------
+    Rule(
+        "notifications_dismiss",
+        [
+            r"(?:efface|ferme|vide|supprime|nettoie|dismiss|clear)\s+(?:mes |les |my |the |toutes les |all )?notifications",
+        ],
+    ),
+    Rule(
+        "notifications_read",
+        [
+            r"(?:lis|lire|donne|montre|resume|read|show)\s+(?:moi\s+)?(?:mes |les |my |the )?(?:dernieres |recent |latest )?notifications|"
+            r"^(?:mes |les |my )?notifications$|quelles sont mes notifications|what are my notifications|"
+            r"(?:j'ai|y a t il) (?:des )?notifications",
+        ],
+    ),
+    Rule(
+        "dnd_off",
+        [
+            r"(?:desactive|enleve|quitte|disable|turn off)\s+(?:le mode )?(?:ne pas deranger|do not disturb|dnd)|(?:ne pas deranger|do not disturb) off",
+        ],
+    ),
+    Rule(
+        "dnd_on",
+        [
+            r"(?:active|mets|passe en|enable|turn on)\s+(?:le mode )?(?:ne pas deranger|do not disturb|dnd)|^(?:mode )?ne pas deranger$|^do not disturb$",
+        ],
+    ),
+    # --- sessions ------------------------------------------------------------------------
+    Rule(
+        "session_save",
+        [
+            r"^(?:sauvegarde|enregistre|sauve|save)\s+(?:cette |la |ma |this |the |my )?session(?:\s+(?:sous|comme|as))?\s+(?:le nom )?(?P<name>.+)$",
+        ],
+    ),
+    Rule(
+        "session_open",
+        [
+            r"^(?:ouvre|lance|charge|restaure|reprends|open|launch|restore|load|resume)\s+(?:moi\s+)?(?:ma |la |my |the )?session\s+(?:de |du |d')?(?P<name>.+)$",
         ],
     ),
     # --- fenêtres et workspaces ------------------------------------------------------------
@@ -336,6 +468,14 @@ RULES: list[Rule] = [
             r"^(?:demande a claude|ask claude|claude|dis a claude|tell claude|demande a l'agent|ask the agent)[,:]?\s+(?P<prompt>.+)$",
         ],
     ),
+    Rule(
+        "ask_llm",
+        [
+            r"^(?:question|explique(?: moi)?|raconte(?: moi)?|pourquoi|comment|qu'est ce que|qu'est ce qu'|c'est quoi|que penses tu|"
+            r"qu'en penses tu|dis moi pourquoi|dis moi comment|donne moi une idee|conseille moi|explain|why|how do|how does|how can|"
+            r"what is|what's|what are|tell me about|question)\b\s*[:]?\s*(?P<prompt>.*)$",
+        ],
+    ),
 ]
 
 YES_WORDS = {
@@ -405,15 +545,27 @@ def parse_yes_no(text: str) -> bool | None:
     return None
 
 
+CONFIRM_INTENTS = {r.name for r in RULES if r.confirm}
+INTENT_NAMES = [r.name for r in RULES]
+_SESSION_VERB = re.compile(
+    r"^(?:ouvre|lance|charge|restaure|reprends|open|launch|restore|load|resume)\s+(?:moi\s+)?"
+)
+
+
 class IntentParser:
     def __init__(
         self,
         custom_commands: Iterable[CustomCommand] = (),
         fuzzy_threshold: float = 0.85,
         rules: Sequence[Rule] = RULES,
+        session_phrases: dict[str, Iterable[str]] | None = None,
     ) -> None:
         self._rules: list[tuple[Rule, list[re.Pattern[str]]]] = [(r, r.compiled()) for r in rules]
         self._custom = [(c, [canonical(p) for p in c.phrases]) for c in custom_commands]
+        self._sessions = {
+            name: [canonical(p) for p in phrases]
+            for name, phrases in (session_phrases or {}).items()
+        }
         self._fuzzy = fuzzy_threshold
 
     # ------------------------------------------------------------------ public
@@ -425,6 +577,9 @@ class IntentParser:
         custom = self._match_custom(canon, text)
         if custom is not None:
             return custom
+        session = self._match_session(canon, text)
+        if session is not None:
+            return session
 
         for rule, patterns in self._rules:
             for pattern in patterns:
@@ -451,6 +606,15 @@ class IntentParser:
         return [r.name for r, _ in self._rules]
 
     # ----------------------------------------------------------------- helpers
+    def _match_session(self, canon: str, original: str) -> Intent | None:
+        """« ouvre ma session vidéo » / « ma session vidéo » quand la phrase est déclarée dans [[sessions]]."""
+        stripped = _SESSION_VERB.sub("", canon)
+        for name, phrases in self._sessions.items():
+            for phrase in phrases:
+                if stripped == phrase or canon == phrase:
+                    return Intent("session_open", {"name": name}, 1.0, original)
+        return None
+
     def _match_custom(self, canon: str, original: str) -> Intent | None:
         best: tuple[float, CustomCommand] | None = None
         for command, phrases in self._custom:

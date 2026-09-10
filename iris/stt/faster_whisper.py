@@ -25,6 +25,7 @@ class FasterWhisperSTT:
         self.cfg = cfg
         self.hotwords = hotwords
         self._model = None
+        self.last_language: str | None = None
 
     def load(self) -> None:
         if self._model is not None:
@@ -69,6 +70,7 @@ class FasterWhisperSTT:
                 continue
             parts.append(seg.text.strip())
         text = " ".join(p for p in parts if p).strip()
+        self.last_language = getattr(info, "language", None)
         if is_hallucination(text):
             log.debug("Transcription ignorée (hallucination probable) : %r", text)
             return ""

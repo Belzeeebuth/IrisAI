@@ -17,9 +17,10 @@ log = logging.getLogger(__name__)
 @dataclass
 class AssistantConfig:
     name: str = "Iris"
-    language: str = "fr"
+    language: str = "fr"  # fr | en | auto (répond dans la langue entendue)
     verbosity: str = "normal"
     tone: str = "warm"
+    personality: str = ""  # profil libre transmis au LLM (« Sois directe, tutoie… »)
     active_window_s: float = 8.0
     follow_up_window_s: float = 5.0
     confirm_timeout_s: float = 12.0
@@ -72,6 +73,20 @@ class STTConfig:
 @dataclass
 class TTSConfig:
     backend: str = "auto"
+    # Kokoro (voix IA locale, 24 kHz)
+    kokoro_model: str = "kokoro-v1.0.onnx"
+    kokoro_voice: str = ""  # vide = ff_siwis (fr) / af_heart (en)
+    kokoro_speed: float = 1.0
+    kokoro_lang: str = ""  # vide = suit la langue ; ex. fr-fr, en-us, en-gb
+    kokoro_models_dir: str = ""  # vide = ~/.local/share/iris/kokoro
+    # Endpoint OpenAI-compatible /audio/speech (OpenAI gpt-4o-mini-tts, Kokoro-FastAPI, Speaches…)
+    openai_base_url: str = "https://api.openai.com/v1"
+    openai_model: str = "gpt-4o-mini-tts"
+    openai_voice: str = "coral"
+    openai_instructions: str = ""  # vide = style par défaut selon le ton
+    openai_speed: float = 1.0
+    openai_api_key_env: str = "OPENAI_API_KEY"
+    # Piper (voix locale de secours)
     piper_voice: str = "fr_FR-siwis-medium"
     piper_voices_dir: str = ""
     piper_length_scale: float = 1.0
@@ -99,6 +114,9 @@ class SystemConfig:
     brightness_step: int = 10
     search_url: str = "https://duckduckgo.com/?q={q}"
     notify: bool = True
+    typing_tool: str = "auto"  # auto | wtype | ydotool | clipboard
+    status_file: str = ""  # vide = $XDG_RUNTIME_DIR/iris/state.json
+    waybar_signal: int = 0  # ex. 8 → pkill -RTMIN+8 waybar à chaque changement d'état
 
 
 @dataclass
@@ -107,6 +125,42 @@ class AgentsConfig:
     claude_bin: str = "claude"
     claude_timeout_s: int = 180
     claude_workdir: str = ""
+
+
+@dataclass
+class LLMConfig:
+    enabled: bool = False
+    provider: str = (
+        "opencode-go"  # opencode-go | opencode-zen | openai | openrouter | ollama | custom
+    )
+    base_url: str = ""  # surcharge l'URL du provider (custom)
+    api: str = (
+        "auto"  # auto | chat | messages   (auto : messages pour claude-*/qwen* chez OpenCode)
+    )
+    model: str = "glm-5.3-flash"
+    api_key_env: str = "OPENCODE_API_KEY"
+    api_key: str = ""  # ou directement ici (déconseillé)
+    timeout_s: float = 30.0
+    max_tokens: int = 400
+    temperature: float = 0.4
+    fallback_nlu: bool = True  # phrase inconnue → le LLM choisit une action ou répond
+    chat: bool = True  # questions ouvertes (« Iris, explique-moi… »)
+    context: bool = True  # fenêtre active, workspace, heure, dernières actions dans le prompt
+    history_turns: int = 6
+    system_prompt_extra: str = ""
+
+
+@dataclass
+class SessionApp:
+    exec: str
+    workspace: int | None = None
+
+
+@dataclass
+class Session:
+    name: str
+    phrases: list[str]
+    apps: list[SessionApp]
 
 
 @dataclass
@@ -129,8 +183,11 @@ class Config:
     privacy: PrivacyConfig = field(default_factory=PrivacyConfig)
     system: SystemConfig = field(default_factory=SystemConfig)
     agents: AgentsConfig = field(default_factory=AgentsConfig)
+    llm: LLMConfig = field(default_factory=LLMConfig)
     apps: dict[str, str] = field(default_factory=dict)
+    bluetooth: dict[str, str] = field(default_factory=dict)
     commands: list[CustomCommand] = field(default_factory=list)
+    sessions: list[Session] = field(default_factory=list)
     source: Path | None = None
 
     @property
@@ -138,6 +195,11 @@ class Config:
         """Langue passée au moteur STT (None = détection automatique)."""
         lang = self.stt.language or self.assistant.language
         return None if lang == "auto" else lang
+
+    @property
+    def reply_language(self) -> str:
+        """Langue par défaut des réponses (« auto » → fr)."""
+        return "fr" if self.assistant.language == "auto" else self.assistant.language
 
 
 SECTION_TYPES: dict[str, type] = {
@@ -149,6 +211,7 @@ SECTION_TYPES: dict[str, type] = {
     "privacy": PrivacyConfig,
     "system": SystemConfig,
     "agents": AgentsConfig,
+    "llm": LLMConfig,
 }
 
 
@@ -190,6 +253,33 @@ def config_from_dict(data: dict[str, Any], source: Path | None = None) -> Config
 
     apps = data.get("apps", {})
     cfg.apps = {str(k): str(v) for k, v in apps.items()} if isinstance(apps, dict) else {}
+    bt = data.get("bluetooth", {})
+    cfg.bluetooth = {str(k): str(v) for k, v in bt.items()} if isinstance(bt, dict) else {}
+
+    sessions: list[Session] = []
+    for i, raw_s in enumerate(data.get("sessions", []) or []):
+        if not isinstance(raw_s, dict):
+            continue
+        name = str(raw_s.get("name") or f"session-{i + 1}")
+        phrases = raw_s.get("phrases") or [name]
+        if isinstance(phrases, str):
+            phrases = [phrases]
+        apps_list: list[SessionApp] = []
+        for raw_app in raw_s.get("apps", []) or []:
+            if isinstance(raw_app, str):
+                apps_list.append(SessionApp(exec=raw_app))
+            elif isinstance(raw_app, dict) and raw_app.get("exec"):
+                ws = raw_app.get("workspace")
+                apps_list.append(
+                    SessionApp(
+                        exec=str(raw_app["exec"]), workspace=int(ws) if ws is not None else None
+                    )
+                )
+        if not apps_list:
+            log.warning("[[sessions]] « %s » ignorée : aucune application", name)
+            continue
+        sessions.append(Session(name=name, phrases=[str(p) for p in phrases], apps=apps_list))
+    cfg.sessions = sessions
 
     commands: list[CustomCommand] = []
     for i, raw_cmd in enumerate(data.get("commands", []) or []):

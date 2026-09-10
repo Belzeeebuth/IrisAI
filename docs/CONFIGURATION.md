@@ -7,7 +7,8 @@ Fichier : `~/.config/iris/config.toml` (`iris config path`). Créé avec toutes 
 | Clé | Défaut | Rôle |
 |---|---|---|
 | `name` | `"Iris"` | Nom (notifications). |
-| `language` | `"fr"` | Langue des réponses et de la transcription (`fr` / `en`). |
+| `language` | `"fr"` | Langue des réponses et de la transcription (`fr` / `en` / `auto` : répond dans la langue détectée). |
+| `personality` | `""` | Profil libre transmis au LLM (« Tutoie-moi, sois directe… »). |
 | `verbosity` | `"normal"` | `concise` · `normal` · `chatty` (ajoute « Autre chose ? »). |
 | `tone` | `"warm"` | `warm` · `direct` · `coach`. |
 | `active_window_s` | `8.0` | Après « Hey Iris » seul, secondes d'attente d'une commande. |
@@ -57,7 +58,14 @@ Fichier : `~/.config/iris/config.toml` (`iris config path`). Créé avec toutes 
 
 | Clé | Défaut | Rôle |
 |---|---|---|
-| `backend` | `"auto"` | `piper` → `espeak` → `console` ; ou `elevenlabs`, `none`. |
+| `backend` | `"auto"` | `kokoro` → `piper` → `espeak` → `console` ; ou `openai`, `elevenlabs`, `none`. |
+| `kokoro_model` | `"kokoro-v1.0.onnx"` | ou `kokoro-v1.0.int8.onnx` / `kokoro-v1.0.fp16.onnx` (`iris voices download kokoro --model …`). |
+| `kokoro_voice` | `""` | vide = `ff_siwis` (fr) / `af_heart` (en). |
+| `kokoro_speed` / `kokoro_lang` / `kokoro_models_dir` | `1.0` / `""` / `""` | Débit ; code espeak (`fr-fr`, `en-us`) ; dossier (`~/.local/share/iris/kokoro`). |
+| `openai_base_url` | `https://api.openai.com/v1` | ou serveur local compatible (`http://localhost:8880/v1`). |
+| `openai_model` / `openai_voice` | `gpt-4o-mini-tts` / `coral` | |
+| `openai_instructions` | `""` | Style de voix ; vide = dérivé du ton. |
+| `openai_speed` / `openai_api_key_env` | `1.0` / `OPENAI_API_KEY` | |
 | `piper_voice` | `"fr_FR-siwis-medium"` | `iris voices list --lang fr_FR`. |
 | `piper_voices_dir` | `""` | Vide = `~/.local/share/iris/voices`. |
 | `piper_length_scale` | `1.0` | < 1 plus rapide, > 1 plus lent. |
@@ -83,6 +91,45 @@ Fichier : `~/.config/iris/config.toml` (`iris config path`). Créé avec toutes 
 | `volume_step` / `brightness_step` | `5` / `10` | Pas pour « monte / baisse ». |
 | `search_url` | DuckDuckGo | `{q}` est remplacé par la requête encodée. |
 | `notify` | `true` | Notification bureau pour les réponses longues (agent). |
+| `typing_tool` | `"auto"` | `wtype` · `ydotool` · `clipboard`. |
+| `status_file` | `""` | Vide = `$XDG_RUNTIME_DIR/iris/state.json`. |
+| `waybar_signal` | `0` | ex. `8` → `pkill -RTMIN+8 waybar` à chaque changement d'état. |
+
+## `[llm]`
+
+| Clé | Défaut | Rôle |
+|---|---|---|
+| `enabled` | `false` | Active le cerveau LLM. |
+| `provider` | `"opencode-go"` | `opencode-go` · `opencode-zen` · `openai` · `openrouter` · `ollama` · `custom`. |
+| `base_url` | `""` | Surcharge l'URL (obligatoire pour `custom`). |
+| `api` | `"auto"` | `chat` (`/chat/completions`) · `messages` (`/messages`) ; auto = messages pour `claude-*`/`qwen*` chez OpenCode. |
+| `model` | `"glm-5.3-flash"` | Identifiant du modèle. |
+| `api_key_env` / `api_key` | `OPENCODE_API_KEY` / `""` | Clé (variable d'environnement, ou inline). |
+| `timeout_s` / `max_tokens` / `temperature` | `30` / `400` / `0.4` | |
+| `fallback_nlu` | `true` | Phrase inconnue → décision du modèle (action / réponse / silence). |
+| `chat` | `true` | Questions ouvertes (`ask_llm`). |
+| `context` | `true` | Heure, fenêtre active, workspace, batterie, dernières actions dans le prompt. |
+| `history_turns` | `6` | Tours de conversation gardés en mémoire (RAM). |
+| `system_prompt_extra` | `""` | Consignes supplémentaires. |
+
+## `[bluetooth]`
+
+`"nom prononcé" = "nom bluetoothctl ou adresse MAC"`, ex. `"mes écouteurs" = "WH-1000XM5"`. Sans alias, Iris cherche le nom le plus proche parmi `bluetoothctl devices`.
+
+## `[[sessions]]`
+
+```toml
+[[sessions]]
+name = "video"
+phrases = ["ma session vidéo", "session montage"]   # « ouvre ma session vidéo » ou juste « session montage »
+apps = [
+  { workspace = 3, exec = "kdenlive" },
+  { workspace = 4, exec = "$TERMINAL -e btop" },
+  "obsidian",                                       # sans workspace : là où tu es
+]
+```
+
+« sauvegarde la session sous X » enregistre les fenêtres ouvertes (classe → commande, workspace) dans le journal ; « ouvre la session X » la restaure.
 
 ## `[agents]`
 

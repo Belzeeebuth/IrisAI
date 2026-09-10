@@ -4,6 +4,8 @@ Toutes les phrases sont normalisées avant analyse : minuscules, accents ignoré
 
 Les intentions marquées **⚠ confirmation** demandent « Veux-tu vraiment … ? » — réponds « oui / vas-y / ok » ou « non / annule ».
 
+Plusieurs commandes dans une phrase : « ouvre le terminal **et** va sur le workspace 2 », « monte le son **puis** ferme firefox », « ouvre firefox **et** spotify ». Si une commande demande confirmation, la suite attend ta réponse.
+
 | Intention | Français | English |
 |---|---|---|
 | `open_app` | ouvre / lance / démarre **le terminal**, mon navigateur, l'éditeur, les fichiers, la musique, la calculatrice, le moniteur système, le lanceur, les raccourcis, Discord, Slack, Signal, Telegram, WhatsApp, Obsidian, Steam, VLC, GIMP, LibreOffice, Thunderbird, YouTube, GitHub, ChatGPT, Claude, Figma, Notion, Zoom, lazygit, neovim… ou n'importe quelle application `.desktop` | open / launch / start firefox, the browser, my editor… |
@@ -40,6 +42,22 @@ Les intentions marquées **⚠ confirmation** demandent « Veux-tu vraiment … 
 | `stop` | stop · arrête · annule · laisse tomber · tais-toi | stop · cancel · never mind |
 | `pause_listening` | mets-toi en pause (pendant **10** minutes) · ne m'écoute plus | stop listening · go to sleep (for 10 minutes) |
 | `resume_listening` | reprends l'écoute · réveille-toi · reprends | resume listening · wake up |
+| `type_text` | écris : **bonjour à tous** · tape … · note … | write … · type … |
+| `dictation_start` / `dictation_stop` | mode dictée · dictée / fin de dictée · arrête la dictée | start dictation / stop dictation |
+| `monitor_move` | envoie cette fenêtre sur l'écran de **droite** / gauche / haut / bas | move this window to the right monitor |
+| `monitor_focus` | va sur l'écran de gauche · écran de droite | focus the left monitor |
+| `bluetooth_on` / `bluetooth_off` | active / désactive le bluetooth | bluetooth on / off |
+| `bluetooth_connect` / `bluetooth_disconnect` | connecte **mes écouteurs** (alias `[bluetooth]` ou nom de l'appareil) / déconnecte le casque | connect my headphones / disconnect … |
+| `wifi_on` / `wifi_off` | active le wifi / coupe le wi-fi | wifi on / turn off the wifi |
+| `airplane_on` / `airplane_off` | mode avion / désactive le mode avion | airplane mode on / off |
+| `battery` | niveau de batterie · batterie | battery level |
+| `audio_output_switch` | change de sortie audio · sortie audio suivante | switch audio output |
+| `notifications_read` | lis mes notifications · mes notifications | read my notifications |
+| `notifications_dismiss` | efface les notifications | clear notifications |
+| `dnd_on` / `dnd_off` | ne pas déranger · active ne pas déranger / désactive ne pas déranger | do not disturb / turn off do not disturb |
+| `session_open` | ouvre ma session **vidéo** · *phrases déclarées dans [[sessions]]* | open my video session |
+| `session_save` | sauvegarde la session sous **montage** | save the session as … |
+| `ask_llm` | pourquoi … · comment … · explique-moi … · c'est quoi … · question : … · *toute phrase inconnue si `llm.fallback_nlu`* | why … · how … · explain … · what is … |
 | `ask_agent` *(expérimental)* | demande à Claude **d'écrire un haïku** · Claude, … | ask Claude to … |
 | `custom` | vos phrases (`[[commands]]`), correspondance floue ≥ 85 % | idem |
 
