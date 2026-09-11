@@ -147,6 +147,12 @@ exec = ["$TERMINAL -e lazydocker"]
 names = ["neovim", "vim", "nvim"]
 exec = ["$TERMINAL -e nvim"]
 
+# La CLI dans un terminal ; « claude » seul reste le site (plus haut).
+# « cloud code » est la transcription la plus courante de « Claude Code » en français.
+[claude-code]
+names = ["claude code", "cloud code", "claude cli"]
+exec = ["$TERMINAL -e claude"]
+
 [opencode]
 names = ["opencode", "open code"]
 exec = ["$TERMINAL -e opencode"]

@@ -20,7 +20,8 @@ DEVICE = r"(?:le |l'|la |the |my |mon |ma )?(?:pc|ordinateur|ordi|computer|syste
 ART = r"(?:l'|le |la |les |un |une |mon |ma |mes |the |my |a |an |this |ce |cet |cette )?"
 APP_WORD = (
     r"(?:nouvelle |nouveau |nouvel |new )?"
-    r"(?:application |app |appli |logiciel |programme |page |onglet |fenetre |tab |window )?(?:de |d'|of )?"
+    r"(?:application |app |appli |logiciel |programme |jeu |jeux |game "
+    r"|page |onglet |fenetre |tab |window )?(?:de |d'|of )?"
 )
 APP_SUFFIX = r"(?:\s+(?:tab|window|page|onglet|fenetre))?"
 WS_WORD = r"(?:workspace|bureau|espace de travail|espace|desktop)"
@@ -649,7 +650,10 @@ RULES: list[Rule] = [
         "ask_agent",
         [
             r"^(?:demande a|ask|dis a|tell)\s+(?P<agent>claude|opencode|codex|gemini|l'agent|the agent)[,:]?\s+(?:de |d'|to )?(?P<prompt>.+)$",
-            r"^(?:lance|run|start|launch)\s+(?P<agent2>un agent|an agent|l'agent|the agent|claude|opencode|codex|gemini)\s*[:,]?\s+(?:pour |to |de |d')?(?P<prompt>.+)$",
+            # « lance Claude Code » nomme une application, pas une consigne donnée à Claude.
+            r"^(?:lance|run|start|launch)\s+(?P<agent2>un agent|an agent|l'agent|the agent"
+            r"|claude(?!\s+(?:code|cli)\b)|opencode|codex|gemini)"
+            r"\s*[:,]?\s+(?:pour |to |de |d')?(?P<prompt>.+)$",
         ],
     ),
     # --- applications (génériques, en dernier) -------------------------------------------

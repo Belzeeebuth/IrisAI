@@ -15,6 +15,9 @@ Restart=on-failure
 RestartSec=3
 TimeoutStopSec=10
 Environment=PYTHONUNBUFFERED=1
+# Le modèle Whisper fragmente beaucoup le tas : sans ce seuil, la glibc conserve
+# ~300 Mo déjà libérés au lieu de les rendre au système.
+Environment=MALLOC_TRIM_THRESHOLD_=131072
 Slice=background.slice
 Nice=5
 
