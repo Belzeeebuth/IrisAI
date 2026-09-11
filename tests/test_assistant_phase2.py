@@ -111,9 +111,21 @@ def test_llm_fallback_reply_and_none(world):
     )
     a.on_utterance("Iris, bidule machin pourquoi bleu ciel")
     assert tts.spoken[-1].startswith("Le ciel est bleu")
+    # Le modèle préfère se taire, mais on l'a appelée par son nom : elle accuse réception
+    # et garde la fenêtre ouverte, là où le silence total laissait croire à un micro mort.
     brain.decision = Decision("none")
     n = len(tts.spoken)
     a.on_utterance("Iris, gnagnagna")
+    assert len(tts.spoken) == n + 1 and a.state == State.ACTIVE
+
+
+def test_llm_silencieux_sans_notre_nom_reste_silencieux(world):
+    """Du bruit pendant la fenêtre d'écoute : on se taît, sans bip parasite."""
+    a, tts, _, _, brain, _ = world
+    a.on_utterance("Hey Iris")
+    brain.decision = Decision("none")
+    n = len(tts.spoken)
+    a.on_utterance("gnagnagna")
     assert len(tts.spoken) == n and a.state == State.IDLE
 
 

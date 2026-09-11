@@ -177,3 +177,54 @@ def test_audio_wake_detection_enters_active(world):
     a, tts, _, _, _ = world
     a.on_wake_detected()
     assert a.state == State.ACTIVE
+
+
+# --------------------------------------------------------------- « hey » écorché par Whisper
+# Vu en vrai dans le journal : « Heille Iris », « Heide Iris », « Hurt, Iris », « Hel, Iris ».
+# Le mot d'activation « iris » était reconnu en suffixe et le « hey » massacré devenait une
+# commande, exécutée en silence : ni bip, ni réponse, Iris semblait sourde.
+@pytest.mark.parametrize("text", ["Heille Iris", "Heide Iris", "Hurt, Iris", "Hel, Iris"])
+def test_hey_ecorche_active_et_bipe(world, text):
+    a, tts, _, fake, _ = world
+    beeps: list[int] = []
+    a._ack = lambda: beeps.append(1)  # le bip, quel que soit le moteur de voix
+    a.on_utterance(text)
+    assert a.state == State.ACTIVE
+    assert beeps == [1], "elle doit signaler qu'elle écoute"
+    assert tts.spoken == [], "et ne rien prononcer : ce n'était pas une commande"
+    assert fake.calls == []
+
+
+def test_un_vrai_mot_avant_le_nom_reste_une_commande(world):
+    """« stop Iris » : un mot unique qui porte une intention n'est pas un « hey » raté."""
+    a, tts, _, _, _ = world
+    beeps: list[int] = []
+    a._ack = lambda: beeps.append(1)
+    a.on_utterance("stop Iris")
+    assert tts.spoken == ["Ok."] and beeps == []
+    assert a.state == State.IDLE
+
+
+def test_une_phrase_avant_le_nom_reste_une_commande(world):
+    a, tts, _, fake, _ = world
+    a.on_utterance("mets le volume à 30, Iris")
+    assert "wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SINK@ 30%" in fake.joined_calls()
+
+
+def test_le_nom_seul_bipe_toujours(world):
+    a, _, _, _, _ = world
+    beeps: list[int] = []
+    a._ack = lambda: beeps.append(1)
+    a.on_utterance("Hey Iris")
+    assert a.state == State.ACTIVE and beeps == [1]
+
+
+def test_hey_ecorche_pendant_la_fenetre_active(world):
+    """Déjà active : « Heide Iris » relance la fenêtre au lieu d'exécuter du bruit."""
+    a, tts, _, fake, _ = world
+    a.on_utterance("Hey Iris")
+    n = len(tts.spoken)
+    a.on_utterance("Heide Iris")
+    assert a.state == State.ACTIVE
+    assert fake.calls == []
+    assert len(tts.spoken) == n + 1  # l'accusé de réception, rien d'autre

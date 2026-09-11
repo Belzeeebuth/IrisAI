@@ -173,15 +173,16 @@ class Assistant:
             return self._handle_confirmation(text)
         if self.state == State.DICTATING:
             return self._handle_dictation(text)
+        addressed = False
         if self.wake is not None:
             match = self.wake.match(text)
             if match is not None:
                 remainder = self._command_from_match(text, match)
-                if not remainder:
+                if not remainder or self._garbled_wake(match, remainder):
                     self._enter_active()
                     return Reply(self.p.get("ack"))
-                text = remainder
-        return self.process_command(text)
+                text, addressed = remainder, True
+        return self.process_command(text, addressed=addressed)
 
     def _command_from_match(self, text: str, match) -> str:
         """Mot d'activation en fin de phrase : « ouvre le projet iris » parle du projet nommé iris.
@@ -204,26 +205,43 @@ class Assistant:
             return text  # « chaque matin ouvre le projet iris » : le mot final fait partie de la consigne
         return match.remainder
 
-    def process_command(self, text: str) -> Reply | None:
+    def _garbled_wake(self, match, command: str) -> bool:
+        """« Heille Iris » : Whisper a écorché le « hey », ce n'est pas une commande.
+
+        Un mot unique placé AVANT le nom d'activation et qui ne correspond à aucune
+        intention est presque toujours un « hey » mal transcrit — « heille », « heide »,
+        « hurt », « hel »… La liste des mots parasites ne les rattrape pas, elle exige
+        une correspondance exacte. Mieux vaut s'activer, et biper pour le dire, que
+        d'exécuter du bruit avant de se taire.
+        """
+        return (
+            match is not None
+            and match.position == "suffix"
+            and len(command.split()) == 1
+            and self.parser.parse(command) is None
+        )
+
+    def process_command(self, text: str, *, addressed: bool = False) -> Reply | None:
+        """addressed : la phrase portait le mot d'activation, elle nous était adressée."""
         parts = split_commands(text, self._intent_name_of)
         if len(parts) > 1:
             reply = None
             for part in parts:
-                reply = self._process_single(part)
+                reply = self._process_single(part, addressed)
                 if self.state == State.CONFIRMING:
                     break  # une confirmation en attente suspend la suite
             return reply
-        return self._process_single(text)
+        return self._process_single(text, addressed)
 
     def _intent_name_of(self, text: str) -> str | None:
         intent = self.parser.parse(text)
         return intent.name if intent else None
 
-    def _process_single(self, text: str) -> Reply | None:
+    def _process_single(self, text: str, addressed: bool = False) -> Reply | None:
         intent = self.parser.parse(text)
         self.on_event("intent", intent.name if intent else "?")
         if intent is None:
-            return self._fallback(text)
+            return self._fallback(text, addressed)
         return self._run_intent(intent)
 
     def _run_intent(self, intent: Intent) -> Reply:
@@ -237,7 +255,7 @@ class Assistant:
             return Reply(question, data={"pending": intent.name})
         return self._execute(intent)
 
-    def _fallback(self, text: str) -> Reply | None:
+    def _fallback(self, text: str, addressed: bool = False) -> Reply | None:
         """Phrase non reconnue : LLM si disponible, sinon « je n'ai pas compris »."""
         if self.brain is not None and self.cfg.llm.fallback_nlu:
             self._status("thinking", text[:80])
@@ -268,6 +286,12 @@ class Assistant:
                     reply = Reply(decision.reply, data={"llm": True})
                     if self.journal is not None:
                         self.journal.log_action("ask_llm", {}, text, True, decision.reply[:200])
+                elif addressed:
+                    # Le modèle préfère se taire, mais on nous a appelée par notre nom :
+                    # un bip dit « j'ai entendu, redis-moi », là où le silence laisse
+                    # croire que le micro est mort.
+                    self._enter_active()
+                    return None
                 else:
                     self._set_state(State.IDLE)
                     return None
@@ -431,7 +455,7 @@ class Assistant:
 
         if self.state == State.ACTIVE:
             command = self._command_from_match(text, match) if match is not None else text
-            if not command:
+            if not command or self._garbled_wake(match, command):
                 self._enter_active()
                 return
             if (
@@ -443,7 +467,7 @@ class Assistant:
                 self._set_state(State.IDLE)
                 self._journal(text, wake=False, handled=False)
                 return
-            self.process_command(command)
+            self.process_command(command, addressed=match is not None)
             self._journal(text, wake=match is not None, handled=True)
             return
 
@@ -456,10 +480,10 @@ class Assistant:
             self._journal(text, wake=False, handled=False)
             return
         command = self._command_from_match(text, match)
-        if not command:
+        if not command or self._garbled_wake(match, command):
             self._enter_active()
         else:
-            self.process_command(command)
+            self.process_command(command, addressed=True)
         self._journal(text, wake=True, handled=True)
 
     def on_wake_detected(self) -> None:
