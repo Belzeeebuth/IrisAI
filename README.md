@@ -234,7 +234,8 @@ Extras disponibles : `stt` (faster-whisper), `tts` (piper-tts), `audio` (soundde
 | `iris voices list [--lang fr_FR] / download NOM` | Voix Piper. |
 | `iris models download [tiny\|base\|small\|medium\|large-v3]` | Modèles Whisper. |
 | `iris journal [--last N] [--stats] [--clear]` | Journal des actions exécutées. |
-| `iris service install / uninstall / status / show` | Service systemd utilisateur. |
+| `iris service install / uninstall / status / show / restart` | Service systemd utilisateur. |
+| `iris restart [--timeout N]` | Relance le service et attend qu'Iris écoute de nouveau ; code de retour 1 (et pointeur vers le journal) si elle ne revient pas. |
 | `iris status [--waybar] [--follow]` | État courant (idle, active, thinking, speaking, dictating…) ; format JSON pour Waybar. |
 | `iris trigger [--pause]` | Push-to-talk : réveille l'instance en cours (comme « Hey Iris ») ; `--pause` bascule pause/reprise. |
 | `iris llm info / test "…" / decide "…" / models` | Cerveau LLM : configuration effective, question de test, décision brute pour une phrase, modèles du provider. |
@@ -466,6 +467,7 @@ Détail par phase, avec les tâches : [docs/ROADMAP.md](docs/ROADMAP.md).
 | Symptôme | Piste |
 |---|---|
 | `iris doctor` : « parec introuvable » | `sudo pacman -S libpulse` ou `uv pip install sounddevice` dans le venv. |
+| Elle ne répond plus (plus de bip, plus de réponse) | `iris restart` : relance le service et attend qu'elle écoute de nouveau (~3 s, le temps de recharger Whisper). |
 | Iris n'entend rien | `iris listen --seconds 5` ; vérifier la source par défaut (`wpctl status`) ; baisser `audio.energy_threshold` ou passer `vad_backend = "webrtc"`. |
 | Elle se déclenche sur d'autres mots | Monter `wake.fuzzy_threshold` (0.85) ou retirer « iris » seul des `phrases`. |
 | Elle ne reconnaît pas « Iris » | Baisser `fuzzy_threshold` (0.70), ajouter les variantes entendues (`journalctl --user -u iris`) dans `phrases`, passer `stt.model = "small"`. |

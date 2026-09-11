@@ -185,6 +185,11 @@ def _parser() -> argparse.ArgumentParser:
     service_sub.add_parser("uninstall")
     service_sub.add_parser("status")
     service_sub.add_parser("show", help="afficher l'unité générée")
+    sr = service_sub.add_parser("restart", help="relancer le service et attendre qu'Iris écoute")
+    sr.add_argument("--timeout", type=float, default=30.0, help="attente maximale (s)")
+
+    restart = sub.add_parser("restart", help="relancer Iris quand elle ne répond plus")
+    restart.add_argument("--timeout", type=float, default=30.0, help="attente maximale (s)")
     return ap
 
 
@@ -813,9 +818,21 @@ def cmd_prefs(cfg: Config, args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_restart(cfg: Config, args: argparse.Namespace) -> int:
+    """« iris restart » : le geste de secours quand Iris n'entend plus rien."""
+    from iris import service
+
+    ok, messages = service.restart(wait_s=args.timeout)
+    for line in messages:
+        print(line, file=sys.stdout if ok else sys.stderr)
+    return 0 if ok else 1
+
+
 def cmd_service(cfg: Config, args: argparse.Namespace) -> int:
     from iris import service
 
+    if args.service_cmd == "restart":
+        return cmd_restart(cfg, args)
     if args.service_cmd == "install":
         for line in service.install(start=not args.no_start):
             print(line)
@@ -843,6 +860,7 @@ COMMANDS = {
     "wakeword": cmd_wakeword,
     "journal": cmd_journal,
     "service": cmd_service,
+    "restart": cmd_restart,
     "status": cmd_status,
     "trigger": cmd_trigger,
     "llm": cmd_llm,

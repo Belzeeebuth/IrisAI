@@ -27,7 +27,13 @@ def test_generic_browser_uses_default(resolver):
 
 @pytest.mark.parametrize(
     "query",
-    ["une page firefox", "une nouvelle page firefox", "un onglet firefox", "la fenêtre de firefox", "new firefox tab"],
+    [
+        "une page firefox",
+        "une nouvelle page firefox",
+        "un onglet firefox",
+        "la fenêtre de firefox",
+        "new firefox tab",
+    ],
 )
 def test_page_words_are_ignored(resolver, query):
     app = resolver.resolve(query)

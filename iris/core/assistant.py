@@ -241,13 +241,21 @@ class Assistant:
         """Phrase non reconnue : LLM si disponible, sinon « je n'ai pas compris »."""
         if self.brain is not None and self.cfg.llm.fallback_nlu:
             self._status("thinking", text[:80])
+            failure = None
             try:
                 decision = self.brain.decide(text, self.p.lang)
             except Exception as exc:  # noqa: BLE001
                 log.warning("LLM indisponible : %s", exc)
-                decision = None
+                decision, failure = None, exc
             finally:
                 self._restore_status()
+            if failure is not None:
+                # Le modèle n'a pas répondu : le dire, plutôt que laisser croire
+                # qu'on n'a pas compris la phrase.
+                reply = Reply(self.p.get("llm_unreachable"), ok=False)
+                self.speak(reply.text)
+                self._after_reply(reply)
+                return reply
             if decision is not None:
                 if decision.kind == "action":
                     intent = self.router.intent_from_decision(decision)

@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 import urllib.error
 import urllib.request
 import uuid
@@ -33,6 +34,8 @@ PROVIDERS: dict[str, dict[str, str]] = {
     "ollama": {"base_url": "http://localhost:11434/v1", "key_env": ""},
     "custom": {"base_url": "", "key_env": ""},
 }
+
+_RETRY_DELAY_S = 0.4  # court répit avant la seconde tentative
 
 # Chez OpenCode, ces familles passent par l'API Anthropic-compatible /messages.
 MESSAGES_API_PREFIXES = ("claude-", "qwen")
@@ -301,13 +304,30 @@ class LLMClient:
         )
 
     # ------------------------------------------------------------------ transport
+    def _send(self, url: str, headers: dict[str, str], body: bytes) -> tuple[int, bytes]:
+        """Un aller-retour HTTP, retenté une fois si le réseau a lâché rapidement.
+
+        Une coupure franche (DNS, connexion refusée, socket fermé) échoue en quelques
+        millisecondes et mérite une seconde chance. Un délai dépassé, lui, a déjà fait
+        attendre l'utilisateur : on ne double pas son silence.
+        """
+        started = time.monotonic()
+        try:
+            return self._transport(url, headers, body, self.timeout)
+        except (urllib.error.URLError, TimeoutError, OSError) as first:
+            if time.monotonic() - started > self.timeout / 2:
+                raise LLMError(f"connexion impossible à {self.base_url} : {first}") from first
+            log.info("LLM injoignable (%s) — seconde tentative", first)
+        time.sleep(_RETRY_DELAY_S)
+        try:
+            return self._transport(url, headers, body, self.timeout)
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            raise LLMError(f"connexion impossible à {self.base_url} : {exc}") from exc
+
     def _post(self, path: str, headers: dict[str, str], payload: dict) -> dict:
         body = json.dumps(payload).encode("utf-8")
         url = f"{self.base_url}{path}"
-        try:
-            status, raw = self._transport(url, headers, body, self.timeout)
-        except (urllib.error.URLError, TimeoutError, OSError) as exc:
-            raise LLMError(f"connexion impossible à {self.base_url} : {exc}") from exc
+        status, raw = self._send(url, headers, body)
         if status >= 400:
             detail = raw.decode("utf-8", "replace")[:300]
             if status in (401, 403):

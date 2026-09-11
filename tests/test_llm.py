@@ -1,4 +1,6 @@
 import json
+import time
+import urllib.error
 
 import pytest
 
@@ -190,3 +192,50 @@ def test_brain_without_context(cfg):
     )
     brain.converse("salut")
     assert "Contexte" not in t.calls[0][2]["messages"][0]["content"]
+
+
+# ---------------------------------------------------------------- réseau qui lâche
+class FlakyTransport:
+    """Échoue les ``failures`` premières fois, puis répond. ``delay`` simule l'attente."""
+
+    def __init__(self, failures: int, error: Exception, delay: float = 0.0) -> None:
+        self.failures = failures
+        self.error = error
+        self.delay = delay
+        self.attempts = 0
+
+    def __call__(self, url, headers, body, timeout):
+        self.attempts += 1
+        if self.attempts <= self.failures:
+            if self.delay:
+                time.sleep(self.delay)
+            raise self.error
+        return 200, json.dumps(chat_response("ok")).encode("utf-8")
+
+
+def client_with(transport, timeout: float = 15.0) -> LLMClient:
+    return LLMClient(
+        "https://exemple.test/v1", "m", "clé", api="chat", timeout=timeout, transport=transport
+    )
+
+
+def test_coupure_franche_retentee_une_fois():
+    """DNS, connexion refusée, socket fermé : ça échoue en quelques ms, on retente."""
+    t = FlakyTransport(1, urllib.error.URLError("connexion réinitialisée"))
+    assert client_with(t).chat([{"role": "user", "content": "salut"}]).text == "ok"
+    assert t.attempts == 2
+
+
+def test_deux_coupures_daffilee_abandonnent():
+    t = FlakyTransport(2, urllib.error.URLError("connexion réinitialisée"))
+    with pytest.raises(LLMError, match="connexion impossible"):
+        client_with(t).chat([{"role": "user", "content": "salut"}])
+    assert t.attempts == 2
+
+
+def test_delai_depasse_non_retente():
+    """Un assistant vocal ne peut pas faire attendre deux fois le même délai."""
+    t = FlakyTransport(2, TimeoutError("The read operation timed out"), delay=0.12)
+    with pytest.raises(LLMError, match="connexion impossible"):
+        client_with(t, timeout=0.2).chat([{"role": "user", "content": "salut"}])
+    assert t.attempts == 1

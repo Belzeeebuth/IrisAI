@@ -27,6 +27,7 @@ from iris.actions import (
     notify,
     omarchy,
     power,
+    prism,
     typing,
     web,
 )
@@ -259,6 +260,21 @@ class Router:
         if closed == 1:
             return Reply(self.p.get("app_closed", app=label))
         return Reply(self.p.get("app_closed_many", app=label, n=closed))
+
+    def _h_open_instance(self, intent: Intent) -> Reply:
+        """« lance l'instance Astraworld » : une partie Minecraft, pas une application."""
+        name = str(intent.slot("instance", "")).strip()
+        if not prism.available():
+            return Reply(self.p.get("instances_unavailable"), ok=False)
+        instance = prism.resolve(name)
+        if instance is None:
+            known = ", ".join(i.name for i in prism.instances())
+            return Reply(
+                self.p.get("instance_not_found", instance=name, known=known or "aucune"),
+                ok=False,
+            )
+        prism.launch(instance, self._launcher())
+        return Reply(self.p.get("instance_launched", instance=instance.name))
 
     def _h_close_all(self, intent: Intent) -> Reply:
         self._hypr()

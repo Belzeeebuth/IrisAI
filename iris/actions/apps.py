@@ -180,7 +180,10 @@ class AppResolver:
     def resolve(self, query: str) -> ResolvedApp | None:
         full = canonical(query)
         q = re.sub(
-            r"^(?:l'|le |la |les |un |une |mon |ma |mes |the |my |a |an )?"
+            r"^(?:completement |totalement |entierement |vraiment |carrement |direct |directement "
+            r"|immediatement |maintenant |rapidement |juste |tout de suite "
+            r"|completely |totally |fully |really |just |right now )?"
+            r"(?:l'|le |la |les |un |une |mon |ma |mes |the |my |a |an )?"
             r"(?:nouvelle |nouveau |nouvel |new )?"
             r"(?:application |app |appli |logiciel |programme |jeu |jeux |game "
             r"|page |onglet |fenetre |tab |window )?"

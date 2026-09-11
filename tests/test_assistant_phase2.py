@@ -135,7 +135,8 @@ def test_llm_fallback_unknown_action(world):
     assert "ne connais pas" in tts.spoken[-1]
 
 
-def test_llm_unavailable_falls_back_to_not_understood(world):
+def test_llm_unavailable_le_dit(world):
+    """Modèle injoignable : le dire, et non laisser croire qu'on n'a pas compris la phrase."""
     a, tts, _, _, brain, _ = world
 
     def boom(text, language="fr"):
@@ -143,7 +144,7 @@ def test_llm_unavailable_falls_back_to_not_understood(world):
 
     brain.decide = boom
     a.on_utterance("Iris, gnagnagna")
-    assert tts.spoken[-1] in {"Je n'ai pas compris.", "Désolée, je n'ai pas saisi."}
+    assert tts.spoken[-1] == "Je n'arrive pas à joindre le modèle."
 
 
 def test_language_auto_switches_replies(world):

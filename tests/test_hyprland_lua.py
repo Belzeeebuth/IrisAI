@@ -8,7 +8,7 @@ from iris.actions import hyprland
 from iris.actions.system import CmdResult
 
 LUA_ERROR = (
-    'error: [string "return hl.dispatch(closewindow address:0x1..."]:1: \')\' expected near '
+    "error: [string \"return hl.dispatch(closewindow address:0x1...\"]:1: ')' expected near "
     "'address'\n\n → Note: dispatch in lua is a shorthand for hl.dispatch(...)"
 )
 

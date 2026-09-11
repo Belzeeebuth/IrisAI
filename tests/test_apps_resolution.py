@@ -217,3 +217,22 @@ def test_claude_code_lance_la_cli_pas_lediteur(resolver, fake_system, monkeypatc
 def test_claude_code_nest_pas_une_consigne_donnee_a_lagent(text, expected):
     intent = parse(text)
     assert intent is not None and intent.name == expected
+
+
+@pytest.mark.parametrize(
+    ("text", "expected_intent", "app"),
+    [
+        ("ferme complètement steam", "close_app", "steam"),
+        ("ferme vraiment spotify", "close_app", "spotify"),
+        ("quitte totalement discord", "close_app", "discord"),
+        ("close completely discord", "close_app", "discord"),
+        ("lance direct firefox", "open_app", "firefox"),
+        ("ouvre tout de suite prism launcher", "open_app", "prism launcher"),
+        ("lance juste spotify", "open_app", "spotify"),
+    ],
+)
+def test_adverbes_entre_le_verbe_et_le_nom(text, expected_intent, app):
+    """« ferme complètement Steam » cherchait une application nommée « complètement steam »."""
+    intent = parse(text)
+    assert intent is not None and intent.name == expected_intent
+    assert intent.slot("app") == app

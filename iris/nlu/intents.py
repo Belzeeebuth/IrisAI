@@ -24,6 +24,12 @@ APP_WORD = (
     r"|page |onglet |fenetre |tab |window )?(?:de |d'|of )?"
 )
 APP_SUFFIX = r"(?:\s+(?:tab|window|page|onglet|fenetre))?"
+# Adverbes glissés entre le verbe et le nom : « ferme complètement Steam ».
+ADV = (
+    r"(?:completement |totalement |entierement |vraiment |carrement |direct |directement "
+    r"|immediatement |maintenant |rapidement |juste |tout de suite "
+    r"|completely |totally |fully |really |just |right now )?"
+)
 WS_WORD = r"(?:workspace|bureau|espace de travail|espace|desktop)"
 DIRECTION = r"(?P<direction>gauche|droite|haut|bas|left|right|up|down|suivant|next|precedent|prev)"
 BT_ART = r"(?:mes |mon |ma |les |le |la |my |the |a |aux |au |to )?"
@@ -656,17 +662,25 @@ RULES: list[Rule] = [
             r"\s*[:,]?\s+(?:pour |to |de |d')?(?P<prompt>.+)$",
         ],
     ),
+    Rule(
+        "open_instance",
+        [
+            rf"^(?:ouvre|ouvrir|lance|lancer|demarre|demarrer|rejoins|open|launch|start|join)"
+            rf"\s+(?:moi\s+)?{ART}(?:instance|partie|monde|world)\s+(?P<instance>.+?)$",
+        ],
+    ),
     # --- applications (génériques, en dernier) -------------------------------------------
     Rule(
         "close_app",
         [
-            rf"^(?:ferme|quitte|tue|close|quit|kill|exit)\s+(?P<app_raw>{ART}{APP_WORD}(?P<app>.+?){APP_SUFFIX})$",
+            rf"^(?:ferme|quitte|tue|close|quit|kill|exit)\s+{ADV}"
+            rf"(?P<app_raw>{ART}{APP_WORD}(?P<app>.+?){APP_SUFFIX})$",
         ],
     ),
     Rule(
         "open_app",
         [
-            rf"^(?:ouvre|ouvrir|lance|lancer|demarre|demarrer|execute|open|launch|start|run)\s+(?:moi\s+)?"
+            rf"^(?:ouvre|ouvrir|lance|lancer|demarre|demarrer|execute|open|launch|start|run)\s+(?:moi\s+)?{ADV}"
             rf"(?P<app_raw>{ART}{APP_WORD}(?P<app>.+?){APP_SUFFIX})$",
         ],
     ),

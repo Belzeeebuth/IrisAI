@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import shutil
 import sys
+import time
 from pathlib import Path
 
 from iris import paths
@@ -92,6 +93,79 @@ def uninstall() -> list[str]:
     if system.which("systemctl"):
         system.run(["systemctl", "--user", "daemon-reload"])
     return messages
+
+
+def installed() -> bool:
+    """L'unité est-elle connue de systemd ? (elle peut venir d'ailleurs que `install`)"""
+    if unit_path().exists():
+        return True
+    if not system.which("systemctl"):
+        return False
+    return system.run(["systemctl", "--user", "cat", UNIT_NAME]).ok
+
+
+def active() -> bool:
+    return system.run(["systemctl", "--user", "is-active", UNIT_NAME]).out.strip() == "active"
+
+
+def ready_since(moment: float) -> bool:
+    """Iris a-t-elle écrit son état après *moment* ?
+
+    Le fichier d'état survit à l'arrêt du service : sans la comparaison d'horodatage,
+    on prendrait l'état laissé par l'instance précédente pour une preuve de vie.
+    """
+    from iris.core.status import StatusWriter
+
+    data = StatusWriter.read() or {}
+    try:
+        written = float(data.get("ts", 0.0))
+    except (TypeError, ValueError):
+        return False
+    return written >= moment and data.get("state") not in (None, "", "off")
+
+
+def restart(wait_s: float = 30.0) -> tuple[bool, list[str]]:
+    """Relance le service, puis attend qu'Iris écoute de nouveau (chargement du modèle compris)."""
+    if not system.which("systemctl"):
+        return False, ["systemctl introuvable : relance « iris run » à la main."]
+    if not installed():
+        return False, [
+            f"Service non installé ({unit_path()}) : lance d'abord `iris service install`."
+        ]
+
+    res = system.run(["systemctl", "--user", "restart", UNIT_NAME], timeout=30)
+    if not res.ok:
+        return False, [f"Relance impossible : {(res.err or res.out).strip()}", _journal_hint()]
+    # Après `restart`, l'ancien processus est mort : tout état plus récent vient du nouveau.
+    started = time.time()
+    messages = ["Service relancé."]
+
+    deadline = time.monotonic() + max(wait_s, 0.0)
+    while time.monotonic() < deadline:
+        if ready_since(started):
+            messages.append(f"Iris écoute de nouveau (prête en {time.time() - started:.0f} s).")
+            return True, messages
+        if not active():
+            messages += [
+                f"Le service s'est arrêté aussitôt (état : {_active_state()}).",
+                _journal_hint(),
+            ]
+            return False, messages
+        time.sleep(0.3)
+
+    messages += [
+        f"Toujours pas d'écoute après {wait_s:.0f} s — le service tourne, mais il démarre mal.",
+        _journal_hint(),
+    ]
+    return False, messages
+
+
+def _active_state() -> str:
+    return system.run(["systemctl", "--user", "is-active", UNIT_NAME]).out.strip() or "inconnu"
+
+
+def _journal_hint() -> str:
+    return f"Journal : journalctl --user -u {UNIT_NAME} -n 50 --no-pager"
 
 
 def status() -> str:
